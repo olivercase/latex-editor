@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manuscript editor</title>
+<link rel="stylesheet" href="/vendor/katex/katex.min.css">
+<script src="/vendor/katex/katex.min.js"></script>
+<style>
+:root {
+  --canvas: #eceae6; --bar: #ffffff; --line: #dcd9d3; --ink: #1c1c1b; --soft: #3a3936;
+  --muted: #74716a; --accent: #2557a7; --accent-soft: #e8eef9; --dirty: #d06a12;
+  --ok: #2c6e49; --bad: #a4262c; --sheet: #ffffff; --hl: #fff2a8; --note: #f6d55c;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--canvas); color: var(--ink); display: flex; flex-direction: column;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+button, select { font: inherit; color: inherit; }
+
+/* ---- top bar ---- */
+header { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: var(--bar);
+  border-bottom: 1px solid var(--line); flex: none; }
+#paper { font-weight: 600; font-size: 14px; padding: 5px 26px 5px 8px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; max-width: 36ch; cursor: pointer; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+#paper:hover { border-color: var(--line); }
+.tools { display: flex; align-items: center; gap: 2px; padding: 0 8px; border-left: 1px solid var(--line); }
+.tool { width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+  display: grid; place-items: center; color: var(--soft); font-size: 15px; padding: 0; }
+.tool:hover { background: #f0efec; }
+.tool.on { background: var(--accent-soft); color: var(--accent); }
+.tool:disabled { opacity: .35; cursor: default; background: transparent; }
+.tool svg { width: 17px; height: 17px; }
+.tool sup, .tool sub { line-height: 0; }
+.spacer { flex: 1; }
+#savestate { color: var(--muted); white-space: nowrap; font-size: 12.5px; }
+#savestate.dirty { color: var(--dirty); }
+.btn { border-radius: 7px; border: 1px solid var(--line); background: #fff; padding: 6px 13px; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: #bdb9b0; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.07); }
+.btn:disabled { opacity: .5; cursor: default; }
+kbd { font: inherit; opacity: .7; margin-left: 6px; font-weight: 400; }
+
+#panel { flex: none; padding: 10px 16px; border-bottom: 1px solid var(--line); display: none;
+  background: #fdf1f0; color: #5c1a1d; max-height: 30vh; overflow: auto; }
+#panel.warn { background: #fdf6e6; color: #5a3d06; }
+#panel.show { display: block; }
+#panel pre { margin: 6px 0; white-space: pre-wrap; font: 12px/1.45 ui-monospace, Menlo, monospace; }
+#panel .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+
+main { flex: 1; display: flex; min-height: 0; }
+#edpane, #pdfpane { overflow: auto; min-width: 260px; }
+#edpane { flex: 0 0 54%; padding: 28px 20px 80px; }
+#pdfpane { flex: 1; padding: 0 14px 14px; position: relative; background: #e3e1dc; }
+#pdfhead { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; align-items: center; padding: 8px 2px;
+  background: #e3e1dc; color: var(--muted); font-size: 12px; }
+#pdfhead b { color: var(--soft); font-weight: 600; letter-spacing: .02em; }
+#buildstate.ok { color: var(--ok); } #buildstate.bad { color: var(--bad); } #buildstate.busy { color: var(--accent); }
+#divider { flex: 0 0 6px; cursor: col-resize; background: var(--line); }
+#divider:hover, #divider.drag { background: #b9b5ab; }
+
+/* ---- status bar ---- */
+footer { flex: none; display: flex; align-items: center; gap: 18px; padding: 4px 14px; background: var(--bar);
+  border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+footer #status { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#status.ok { color: var(--ok); } #status.bad { color: var(--bad); } #status.dirty { color: var(--dirty); }
+label.tog { display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
+
+/* ---- the page ---- */
+#sheet { background: var(--sheet); max-width: 816px; margin: 0 auto; padding: 84px 92px 110px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.10); min-height: 80vh;
+  font: 16.5px/1.62 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  color: #1a1a19; font-kerning: normal; text-rendering: optimizeLegibility; }
+.region { outline: none; margin: 0 0 .8em; position: relative; white-space: normal; overflow-wrap: break-word;
+  cursor: text; caret-color: var(--accent); }
+.region::selection, .region *::selection { background: #cfdcf5; }
+.region.dirty::before { content: ""; position: absolute; left: -26px; top: .25em; bottom: .25em; width: 3px;
+  border-radius: 2px; background: var(--dirty); }
+.region.flash { animation: flash 1.4s ease-out; }
+.region.frozen { cursor: default; }
+.region.frozen::after { content: "edit in main.tex"; position: absolute; right: -86px; top: .3em;
+  font: 10.5px/1 -apple-system, sans-serif; color: #a8a49b; opacity: 0; transition: opacity .2s; }
+.region.frozen:hover::after { opacity: 1; }
+@keyframes flash { from { background: #fff1b8; } to { background: transparent; } }
+.k-title { font-size: 1.62em; line-height: 1.28; font-weight: 700; text-align: center; margin: 0 0 1.6em; letter-spacing: -.005em; }
+.k-h1 { font-size: 1.28em; font-weight: 700; margin-top: 1.7em; margin-bottom: .55em; }
+.k-h2 { font-size: 1.1em; font-weight: 700; margin-top: 1.35em; margin-bottom: .45em; }
+.k-h3 { font-size: 1em; font-weight: 700; font-style: italic; margin-top: 1.1em; margin-bottom: .35em; }
+.k-h4 { font-weight: 700; margin-bottom: .25em; }
+.k-item { margin-left: 1.5em; }
+.k-item::after { content: "•"; position: absolute; left: -1em; top: 0; }
+.in-abstract { font-size: .95em; }
+.envlabel { font-weight: 700; text-align: center; margin: 1em 0 .5em; font-size: .95em; }
+
+/* text the editor must keep exactly but you do not need to see as code */
+.region span[style], .region font { font: inherit !important; color: inherit !important; background: none !important;
+  text-decoration: inherit !important; vertical-align: baseline !important; }
+.atom { user-select: all; cursor: default; }
+.atom.cite, .atom.ref { color: var(--accent); border-radius: 3px; }
+.atom.cite:hover, .atom.ref:hover { background: var(--accent-soft); }
+.atom.macro { border-bottom: 1px dotted transparent; }
+.atom.macro:hover { border-bottom-color: var(--muted); }
+.atom.cmdtext { background: var(--hl); border-radius: 2px; padding: 0 1px; }
+.atom.note { display: inline-block; font: 600 9.5px/15px -apple-system, sans-serif; letter-spacing: .02em;
+  background: var(--note); color: #5a4300; border-radius: 3px 3px 3px 0; padding: 0 4px; margin: 0 2px;
+  vertical-align: .55em; cursor: help; }
+.atom.math { white-space: nowrap; }
+.atom.math .katex { font-size: 1.04em; }
+.atom.math.plain { font-style: italic; }
+.atom.math sup, .atom.math sub { font-size: .72em; line-height: 0; }
+.atom.rawmath:not(.tex), .atom.cmd { font: 12px/1.3 ui-monospace, Menlo, monospace; background: #f1efea; color: #55524b;
+  border-radius: 3px; padding: 1px 4px; white-space: normal; }
+.atom.tt { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background: none; padding: 0; }
+.atom.comment { display: inline-block; width: 0; overflow: hidden; vertical-align: top; }
+.atom.parbreak { color: var(--dirty); font-family: -apple-system, sans-serif; font-size: .8em; padding: 0 3px; }
+body.showraw .atom.comment { width: auto; font: 11px/1 ui-monospace, Menlo, monospace; color: #9a968d;
+  background: #f3f1ec; border-radius: 3px; padding: 1px 3px; }
+.w-b, b, strong { font-weight: 700; } .w-i, i, em { font-style: italic; } .w-u, u { text-decoration: underline; }
+.w-sup { vertical-align: super; font-size: .72em; line-height: 0; }
+.w-sub { vertical-align: sub; font-size: .72em; line-height: 0; }
+.w-tt { font: .86em ui-monospace, Menlo, monospace; } .w-sc { font-variant: small-caps; }
+.w-link { color: var(--accent); text-decoration: underline; text-decoration-color: #9db3dc; }
+.w-todo { background: var(--hl); }
+.w-fn { font-size: .86em; color: var(--muted); }
+.w-fn::before { content: "[footnote: "; } .w-fn::after { content: "]"; }
+
+/* figures, tables, equations */
+.locked { margin: 1.4em 0; }
+.locked .cap { font-size: .9em; line-height: 1.55; }
+.locked .cap .region { margin-bottom: .2em; display: inline; }
+.locked .capwrap { display: flex; gap: .35em; align-items: baseline; }
+.locked .capno { font-weight: 700; white-space: nowrap; font-size: .9em; }
+.locked .thumb { display: block; max-width: 100%; max-height: 340px; margin: 4px auto 12px; background: #fff; }
+.locked.figure .ph { height: 120px; display: grid; place-items: center; color: #b3afa6; font: 12px -apple-system, sans-serif;
+  border: 1px dashed #dedad2; border-radius: 4px; margin-bottom: 10px; }
+.locked.table table { border-collapse: collapse; margin: 10px auto 2px; font-size: .84em; line-height: 1.4; max-width: 100%; }
+.locked.table th, .locked.table td { padding: 4px 9px; text-align: left; vertical-align: top; border-bottom: 1px solid #e7e4de; }
+.locked.table tr:first-child td { border-top: 1.5px solid #3a3936; border-bottom: 1px solid #3a3936; font-weight: 600; }
+.locked.table tr:last-child td { border-bottom: 1.5px solid #3a3936; }
+.locked.table .tablewrap { overflow-x: auto; }
+.locked.table .note2 { text-align: center; font: 11.5px -apple-system, sans-serif; color: #a8a49b; margin-top: 4px; }
+.locked.equation { display: flex; align-items: center; justify-content: center; position: relative; margin: 1em 0; cursor: default; min-height: 1.6em; }
+.locked.equation .eqno { position: absolute; right: 0; }
+.locked.equation.rawmath { display: block; font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap;
+  background: #f5f3ee; border-radius: 4px; padding: 8px 10px; color: #55524b; }
+.locked.equation .katex-display { margin: 0; }
+.locked.raw { display: none; font: 11.5px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap;
+  background: #f5f3ee; color: #77736b; border-radius: 4px; padding: 6px 10px; max-height: 9em; overflow: hidden; }
+body.showraw .locked.raw { display: block; }
+.locked.note .tag { font: 600 11px/1.3 -apple-system, sans-serif; color: var(--muted); margin-bottom: 4px; }
+
+/* ---- the PDF ---- */
+#pages { margin: 0 auto; }
+.page { position: relative; background: #fff; margin: 0 auto 12px; box-shadow: 0 1px 3px rgba(0,0,0,.2); cursor: pointer; }
+.page canvas { display: block; width: 100%; height: 100%; }
+.marker { position: absolute; left: 0; width: 5px; background: var(--accent); border-radius: 2px; opacity: 0;
+  transition: opacity .9s; pointer-events: none; }
+.marker.on { opacity: .9; transition: none; }
+#nopdf { color: var(--muted); text-align: center; padding: 60px 20px; }
+#hint { position: sticky; bottom: 8px; margin: 0 auto; width: max-content; max-width: 90%; background: rgba(40,40,38,.85);
+  color: #fff; border-radius: 14px; padding: 5px 13px; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity .3s; z-index: 3; }
+#hint.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <select id="paper" title="Choose a paper"></select>
+  <div class="tools" id="tools">
+    <button class="tool" data-cmd="undo" title="Undo (⌘Z)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5L3.5 8.5 7 12"/><path d="M4 8.5h8a4.5 4.5 0 010 9H9"/></svg></button>
+    <button class="tool" data-cmd="redo" title="Redo (⇧⌘Z)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5l3.5 3.5L13 12"/><path d="M16 8.5H8a4.5 4.5 0 000 9h3"/></svg></button>
+  </div>
+  <div class="tools">
+    <button class="tool" data-fmt="b" title="Bold (⌘B)" style="font-weight:700;font-family:Georgia,serif">B</button>
+    <button class="tool" data-fmt="i" title="Italic (⌘I)" style="font-style:italic;font-family:Georgia,serif">I</button>
+    <button class="tool" data-fmt="u" title="Underline (⌘U)" style="text-decoration:underline;font-family:Georgia,serif">U</button>
+    <button class="tool" data-fmt="sup" title="Superscript" style="font-family:Georgia,serif;font-size:14px">x<sup style="font-size:9px">2</sup></button>
+    <button class="tool" data-fmt="sub" title="Subscript" style="font-family:Georgia,serif;font-size:14px">x<sub style="font-size:9px">2</sub></button>
+  </div>
+  <div class="spacer"></div>
+  <span id="savestate">All changes saved</span>
+  <button id="undo" class="btn" hidden title="Put main.tex back to how it was before the last save">Undo last save</button>
+  <button id="save" class="btn primary">Save<kbd>⌘S</kbd></button>
+</header>
+<div id="panel"></div>
+<main>
+  <section id="edpane"><div id="sheet"></div></section>
+  <div id="divider"></div>
+  <section id="pdfpane"><div id="pdfhead"><b>PDF</b><span id="buildstate"></span></div><div id="pages"></div><div id="hint"></div></section>
+</main>
+<footer>
+  <span id="words"></span>
+  <span id="status">Loading…</span>
+  <label class="tog" title="Show the parts of the file that are LaTeX only (they cannot be edited here)">
+    <input type="checkbox" id="showraw"> Show LaTeX blocks</label>
+</footer>
+
+<script type="module">
+import * as pdfjsLib from '/vendor/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.mjs';
+
+const $ = id => document.getElementById(id);
+const sheet = $('sheet'), edpane = $('edpane'), pdfpane = $('pdfpane'), pagesEl = $('pages');
+const statusEl = $('status'), panel = $('panel'), saveBtn = $('save'), undoBtn = $('undo');
+const saveState = $('savestate'), buildState = $('buildstate'), wordsEl = $('words');
+function setBuild(text, cls = '') { buildState.textContent = text; buildState.className = cls; }
+
+let paper = null;          // folder name
+let doc = null;            // payload of /api/doc
+let regions = new Map();   // id -> {el, item, base, words, tri}
+let busy = false;
+let pdf = null, pages = [], pdfScale = 1, pdfStamp = 0;
+
+const enc = encodeURIComponent;
+const getJSON = async url => { const r = await fetch(url); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j; };
+const postJSON = async (url, body) => {
+  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json().catch(() => ({error: r.statusText}));
+  j.status = r.status;
+  return j;
+};
+function setStatus(text, cls = '') { statusEl.textContent = text; statusEl.className = cls; }
+function showPanel(html, cls = '') { panel.innerHTML = html; panel.className = 'show ' + cls; }
+function hidePanel() { panel.className = ''; panel.innerHTML = ''; }
+const escHTML = s => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+// ---------------------------------------------------------------- maths
+let texMacros = {};
+function texBody(raw) {
+  let s = raw.trim();
+  for (const [a, b] of [['$$', '$$'], ['$', '$'], ['\\(', '\\)'], ['\\[', '\\]']])
+    if (s.startsWith(a) && s.endsWith(b) && s.length >= a.length + b.length) return s.slice(a.length, s.length - b.length);
+  const m = s.match(/^\\ensuremath\s*\{([\s\S]*)\}$/);
+  return m ? m[1] : s;
+}
+function texHTML(body, display) {
+  if (!window.katex) return null;
+  try {
+    return katex.renderToString(body, {displayMode: display, throwOnError: true, strict: 'ignore',
+      trust: false, macros: Object.assign({}, texMacros), output: 'html'});
+  } catch (e) { return null; }
+}
+function renderTex(root) {
+  for (const el of root.querySelectorAll('.tex[data-tex]')) {
+    const h = texHTML(texBody(el.dataset.tex), false);
+    if (h) el.innerHTML = h;
+  }
+}
+
+// ---------------------------------------------------------------- tokens -> DOM
+function renderTokens(tokens, parent) {
+  for (const t of tokens) {
+    if (t[0] === 't') parent.appendChild(document.createTextNode(t[1]));
+    else if (t[0] === 'a') {
+      const s = document.createElement('span');
+      s.className = 'atom ' + t[3];
+      s.contentEditable = 'false';
+      s.dataset.raw = t[1];
+      const cls = t[3];
+      const k = cls.includes('math') ? texHTML(texBody(t[1]), false) : null;
+      if (k) { s.innerHTML = k; s.classList.add('tex'); }
+      else if (t[4]) { s.innerHTML = t[4]; if (cls.includes('math')) s.classList.add('plain'); }
+      else s.textContent = t[2];
+      if (cls === 'note') {
+        const m = t[1].match(/^\\reviewnote\{([^{}]*)\}\{([^{}]*)\}\{([\s\S]*)\}\s*$/);
+        s.title = m ? `${m[1]} (${m[2]}): ${m[3].replace(/\s+/g, ' ')}` : t[1];
+      } else if (cls !== 'sp') s.title = t[1].trim().slice(0, 400);
+      parent.appendChild(s);
+    } else {
+      const s = document.createElement('span');
+      s.className = 'wrap' + (t[4] ? ' w-' + t[4] : '');
+      s.dataset.pre = t[1];
+      s.dataset.suf = t[3];
+      renderTokens(t[2], s);
+      parent.appendChild(s);
+    }
+  }
+}
+function plainText(tokens) {
+  let out = '';
+  for (const t of tokens) out += t[0] === 't' ? t[1] : t[0] === 'w' ? plainText(t[2]) : ' ';
+  return out;
+}
+
+// ---------------------------------------------------------------- DOM -> LaTeX
+// Mirrors serialize() in server.py: text is escaped, chips give back their
+// exact source, wrappers give prefix + contents + suffix.
+const ESC = {'%': '\\%', '&': '\\&', '#': '\\#', '_': '\\_', '$': '\\$', '{': '\\{', '}': '\\}',
+  '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}'};
+const NEWWRAP = {B: '\\textbf{', STRONG: '\\textbf{', I: '\\textit{', EM: '\\textit{', U: '\\underline{',
+  SUP: '\\textsuperscript{', SUB: '\\textsubscript{'};
+// serShape also returns `shape`: what the paragraph shows (text, chips,
+// wrappers in order). The server re-reads the LaTeX and refuses to save
+// unless it means the same thing.
+function serShape(root, kind) {
+  let out = '';
+  const shape = [];
+  let openComment = false;        // last thing written was a "% ..." with no newline
+  const emit = s => {
+    if (!s) return;
+    if (openComment) { out += '\n'; openComment = false; }
+    out += s;
+  };
+  const text = t => {
+    t = t.replace(/ /g, ' ').replace(/[​﻿]/g, '');
+    if (!t) return;
+    if (openComment) { out += '\n'; openComment = false; }
+    // "\textmu" followed by a typed letter or space would otherwise be misread by TeX
+    if (/\\[A-Za-z]+$/.test(out) && /^[A-Za-z \t]/.test(t)) out += '{}';
+    // "\\" or "\item" followed by a typed "[" or "*" would take it as an option
+    if (/(\\\\\*?|\\item[ \t]*)$/.test(out) && /^[[*]/.test(t)) out += '{}';
+    // a bullet that starts with "[" would make it the bullet's label
+    if (kind === 'item' && out === '' && /^[[*]/.test(t)) out += '{}';
+    out += t.replace(/[%&#_${}\\~^]/g, c => ESC[c]);
+    shape.push(['t', t]);
+  };
+  const atom = raw => {
+    emit(raw);
+    if (/^[ \t]*%/.test(raw) && !raw.endsWith('\n')) openComment = true;
+  };
+  const walk = node => {
+    for (const c of node.childNodes) {
+      if (c.nodeType === 3) text(c.data);
+      else if (c.nodeType === 1) {
+        if (c.dataset.raw !== undefined) {
+          if (c.classList.contains('parbreak')) {
+            atom(c.dataset.raw);
+            if (c.dataset.raw.includes('\\item')) { shape.push(['t', '\n']); shape.push(['a', '\\item ']); }
+            else shape.push(['t', '\n\n']);
+          } else { atom(c.dataset.raw); shape.push(['a', c.dataset.raw]); }
+        } else if (c.dataset.pre !== undefined || (NEWWRAP[c.tagName] && c.textContent.trim())) {
+          const pre = c.dataset.pre !== undefined ? c.dataset.pre : NEWWRAP[c.tagName];
+          const suf = c.dataset.pre !== undefined ? c.dataset.suf : '}';
+          const save = [out, shape.length, openComment];
+          emit(pre); shape.push(['(', pre]);
+          const inner = out.length;
+          walk(c);
+          if (out.length === inner) {        // emptied wrapper: drop it
+            out = save[0]; shape.length = save[1]; openComment = save[2];
+          } else { emit(suf); shape.push([')', suf]); }
+        }
+        else if (c.tagName !== 'BR') walk(c);
+      }
+    }
+  };
+  walk(root);
+  return {latex: out, shape};
+}
+const ser = (root, kind) => serShape(root, kind).latex;
+
+// ---------------------------------------------------------------- words for matching
+const wordsOf = s => (s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().match(/[a-z]+/g) || []);
+function trigrams(w) { const out = []; for (let i = 0; i + 2 < w.length; i++) out.push(w[i] + ' ' + w[i + 1] + ' ' + w[i + 2]); return out; }
+
+// ---------------------------------------------------------------- build the sheet
+function makeRegion(item, envs) {
+  const el = document.createElement('div');
+  el.className = 'region k-' + item.kind + (envs.includes('abstract') ? ' in-abstract' : '');
+  el.dataset.id = item.id;
+  el.spellcheck = true;
+  renderTokens(item.tokens, el);
+  const base = ser(el, item.kind);
+  const words = wordsOf(plainText(item.tokens));
+  const rec = {el, item, base, words, tri: new Set(trigrams(words)), joined: words.join('')};
+  if (base === item.src) el.contentEditable = 'true';
+  else { el.classList.add('frozen'); el.title = 'This paragraph cannot be edited here; edit it in main.tex.'; }
+  regions.set(item.id, rec);
+  return el;
+}
+const figObserver = new IntersectionObserver(entries => {
+  for (const e of entries) if (e.isIntersecting) { figObserver.unobserve(e.target); loadThumb(e.target); }
+}, {root: edpane, rootMargin: '500px'});
+async function loadThumb(holder) {
+  try {
+    const r = await fetch(`/api/fig?paper=${enc(paper)}&path=${enc(holder.dataset.path)}`);
+    if (!r.ok) { holder.textContent = 'Image not found: ' + holder.dataset.path; return; }
+    const type = r.headers.get('Content-Type') || '';
+    const buf = await r.arrayBuffer();
+    if (type.includes('pdf')) {
+      const d = await pdfjsLib.getDocument({data: buf}).promise;
+      const pg = await d.getPage(1);
+      const v1 = pg.getViewport({scale: 1});
+      const vp = pg.getViewport({scale: Math.min(2, 900 / v1.width)});
+      const c = document.createElement('canvas');
+      c.width = vp.width; c.height = vp.height; c.className = 'thumb';
+      await pg.render({canvasContext: c.getContext('2d'), viewport: vp}).promise;
+      holder.replaceWith(c);
+      d.destroy();
+    } else {
+      const img = new Image();
+      img.className = 'thumb';
+      img.src = URL.createObjectURL(new Blob([buf], {type}));
+      holder.replaceWith(img);
+    }
+  } catch (e) { /* no preview */ }
+}
+function equationHTML(tex) {
+  const clean = tex.replace(/\\label\s*\{[^{}]*\}/g, '').replace(/\\(nonumber|notag)\b/g, '');
+  let h = texHTML(clean, true);
+  if (h) return h;
+  const m = clean.match(/^\\begin\{([A-Za-z]+)\*?\}([\s\S]*)\\end\{\1\*?\}\s*$/);
+  if (m) h = texHTML(/&|\\\\/.test(m[2]) ? `\\begin{aligned}${m[2]}\\end{aligned}` : m[2], true);
+  return h;
+}
+function captionBlock(item, envs, word) {
+  const box = document.createElement('div');
+  box.className = 'cap';
+  for (const r of item.regions || []) {
+    const row = document.createElement('div');
+    row.className = 'capwrap';
+    if (word) { const n = document.createElement('span'); n.className = 'capno'; n.textContent = word + (item.number ? ' ' + item.number : '') + '.'; row.appendChild(n); word = null; }
+    row.appendChild(makeRegion(r, envs));
+    box.appendChild(row);
+  }
+  return box;
+}
+function makeLocked(item, envs) {
+  const el = document.createElement('div');
+  el.className = 'locked ' + item.kind;
+  if (item.kind === 'raw') { el.textContent = item.preview; return el; }
+  if (item.kind === 'equation') {
+    const h = item.tex ? equationHTML(item.tex) : null;
+    if (h) el.innerHTML = h;
+    else if (item.html) el.innerHTML = `<span style="font-style:italic">${item.html}</span>`;
+    else { el.classList.add('rawmath'); el.textContent = item.preview; }
+    if (item.number && !el.classList.contains('rawmath')) {
+      const n = document.createElement('span'); n.className = 'eqno'; n.textContent = '(' + item.number + ')'; el.appendChild(n);
+    }
+    el.title = 'Equations are edited in main.tex';
+    return el;
+  }
+  if (item.kind === 'figure') {
+    for (const g of (item.graphics || []).slice(0, 2)) {
+      const h = document.createElement('div');
+      h.className = 'ph'; h.textContent = g.split('/').pop();
+      h.dataset.path = g;
+      el.appendChild(h);
+      figObserver.observe(h);
+    }
+    el.appendChild(captionBlock(item, envs, 'Figure'));
+    return el;
+  }
+  if (item.kind === 'table') {
+    el.appendChild(captionBlock(item, envs, 'Table'));
+    if (item.rows) {
+      const wrap = document.createElement('div'); wrap.className = 'tablewrap';
+      const t = document.createElement('table');
+      for (const row of item.rows) {
+        const tr = t.insertRow();
+        for (const [html, span] of row) { const td = tr.insertCell(); td.innerHTML = html; if (span > 1) td.colSpan = span; }
+      }
+      renderTex(t);
+      wrap.appendChild(t); el.appendChild(wrap);
+      const n = document.createElement('div'); n.className = 'note2'; n.textContent = 'Table cells are edited in main.tex';
+      el.appendChild(n);
+    } else {
+      const n = document.createElement('div'); n.className = 'note2'; n.textContent = 'This table is edited in main.tex';
+      el.appendChild(n);
+    }
+    return el;
+  }
+  // a one-command block such as \reviewnote{...}{...}{...}
+  const tag = document.createElement('div');
+  tag.className = 'tag';
+  tag.textContent = item.env === 'reviewnote' ? 'Review note' : item.env;
+  el.appendChild(tag);
+  for (const r of item.regions || []) el.appendChild(makeRegion(r, envs));
+  return el;
+}
+function renderDoc() {
+  regions = new Map();
+  const frag = document.createDocumentFragment();
+  const envs = [];
+  for (const item of doc.items) {
+    if (item.type === 'region') frag.appendChild(makeRegion(item, envs));
+    else if (item.type === 'locked') frag.appendChild(makeLocked(item, envs));
+    else if (item.type === 'env') {
+      if (item.open) {
+        envs.push(item.name);
+        if (item.name === 'abstract') { const l = document.createElement('div'); l.className = 'envlabel'; l.textContent = 'Abstract'; frag.appendChild(l); }
+      } else envs.pop();
+    }
+  }
+  sheet.replaceChildren(frag);
+  refreshDirty();
+}
+
+// ---------------------------------------------------------------- dirty state
+function dirtyList() {
+  const out = [];
+  for (const r of regions.values()) {
+    if (r.el.contentEditable !== 'true') continue;
+    const now = serShape(r.el, r.item.kind);
+    const d = now.latex !== r.base;
+    r.el.classList.toggle('dirty', d);
+    if (d) out.push({start: r.item.start, end: r.item.end, old: r.item.src, new: now.latex, shape: now.shape});
+  }
+  return out;
+}
+function refreshDirty() {
+  const n = dirtyList().length;
+  saveBtn.firstChild.textContent = n ? 'Save' : 'Recompile';
+  saveState.textContent = n ? (n === 1 ? '1 paragraph not saved' : n + ' paragraphs not saved') : 'All changes saved';
+  saveState.className = n ? 'dirty' : '';
+  clearTimeout(refreshDirty.t); refreshDirty.t = setTimeout(countWords, 300);
+  return n;
+}
+
+// ---------------------------------------------------------------- formatting (B, I, U, x², x₂)
+// New formatting is written as a wrapper span that carries its own LaTeX
+// (data-pre), so what is saved is exactly what is shown. Changes go through
+// execCommand('insertHTML') so ⌘Z undoes them like typing.
+const FMT = {
+  b: {cls: 'w-b', tags: ['B', 'STRONG'], pre: '\\textbf{', native: 'bold'},
+  i: {cls: 'w-i', tags: ['I', 'EM'], pre: '\\textit{', native: 'italic'},
+  u: {cls: 'w-u', tags: ['U'], pre: '\\underline{', native: 'underline'},
+  sup: {cls: 'w-sup', tags: ['SUP'], pre: '\\textsuperscript{', native: 'superscript'},
+  sub: {cls: 'w-sub', tags: ['SUB'], pre: '\\textsubscript{', native: 'subscript'},
+};
+function editableRegion(node) {
+  const el = regionOf(node);
+  return el && el.contentEditable === 'true' ? el : null;
+}
+function fmtAncestor(node, f, stop) {
+  for (let n = node && (node.nodeType === 1 ? node : node.parentElement); n && n !== stop; n = n.parentElement)
+    if (n.classList.contains(f.cls) || f.tags.includes(n.tagName)) return n;
+  return null;
+}
+function snapToAtoms(range) {
+  const atomOf = n => { const e = n && (n.nodeType === 1 ? n : n.parentElement); return e && e.closest('.atom'); };
+  const a = atomOf(range.startContainer); if (a) range.setStartBefore(a);
+  const b = atomOf(range.endContainer); if (b) range.setEndAfter(b);
+}
+const hasText = frag => frag.textContent.length > 0 || frag.querySelector && frag.querySelector('.atom');
+function fragHTML(frag) { const d = document.createElement('div'); d.appendChild(frag); return d.innerHTML; }
+function shellHTML(wrap, frag) { const s = wrap.cloneNode(false); s.appendChild(frag); return s.outerHTML; }
+function applyFormat(key) {
+  const f = FMT[key];
+  const sel = getSelection();
+  if (!sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  const region = editableRegion(range.startContainer);
+  if (!region || editableRegion(range.endContainer) !== region) { hint('Select text inside one paragraph to format it'); return; }
+  if (range.collapsed) { document.execCommand(f.native); refreshDirty(); updateTools(); return; }
+  snapToAtoms(range);
+  const w1 = fmtAncestor(range.startContainer, f, region), w2 = fmtAncestor(range.endContainer, f, region);
+  if (w1 && w1 === w2) {
+    // remove: keep the formatting on the parts of the wrapper outside the selection
+    const before = document.createRange(); before.setStart(w1, 0); before.setEnd(range.startContainer, range.startOffset);
+    const after = document.createRange(); after.setStart(range.endContainer, range.endOffset); after.setEnd(w1, w1.childNodes.length);
+    const b = before.cloneContents(), m = range.cloneContents(), a = after.cloneContents();
+    const html = (hasText(b) ? shellHTML(w1, b) : '') + fragHTML(m) + (hasText(a) ? shellHTML(w1, a) : '');
+    const whole = document.createRange(); whole.selectNode(w1);
+    sel.removeAllRanges(); sel.addRange(whole);
+    document.execCommand('insertHTML', false, html);
+  } else {
+    const s = document.createElement('span');
+    s.className = 'wrap ' + f.cls;
+    s.dataset.pre = f.pre; s.dataset.suf = '}';
+    s.appendChild(range.cloneContents());
+    if (!s.textContent.trim()) return;
+    document.execCommand('insertHTML', false, s.outerHTML);
+  }
+  refreshDirty(); updateTools();
+}
+function updateTools() {
+  const sel = getSelection();
+  const node = sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+  const region = editableRegion(node);
+  for (const b of document.querySelectorAll('.tool[data-fmt]')) {
+    b.disabled = !region || busy;
+    b.classList.toggle('on', !!(region && fmtAncestor(node, FMT[b.dataset.fmt], region)));
+  }
+}
+document.addEventListener('selectionchange', () => { clearTimeout(updateTools.t); updateTools.t = setTimeout(updateTools, 60); });
+for (const b of document.querySelectorAll('.tool')) {
+  b.addEventListener('mousedown', e => e.preventDefault());      // keep the caret where it is
+  b.addEventListener('click', () => {
+    if (b.dataset.fmt) applyFormat(b.dataset.fmt);
+    else if (b.dataset.cmd) { document.execCommand(b.dataset.cmd); refreshDirty(); }
+  });
+}
+function countWords() {
+  let n = 0;
+  for (const r of regions.values()) n += (r.el.textContent.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length;
+  wordsEl.textContent = n.toLocaleString() + ' words';
+}
+
+// ---------------------------------------------------------------- editing behaviour
+function regionOf(node) {
+  const el = node && (node.nodeType === 1 ? node : node.parentElement);
+  return el ? el.closest('.region') : null;
+}
+sheet.addEventListener('input', e => { refreshDirty(); });
+sheet.addEventListener('keydown', e => {
+  const el = regionOf(e.target);
+  if (!el) return;
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const kind = regions.get(el.dataset.id)?.item.kind;
+    if (e.shiftKey || (kind !== 'p' && kind !== 'item')) return;
+    // not inside bold, italic, a footnote...: the break would split the command
+    const sel = getSelection();
+    const inWrap = n => { const x = n && (n.nodeType === 1 ? n : n.parentElement); const w = x && x.closest('.wrap, b, strong, i, em, u, sup, sub'); return w && el.contains(w); };
+    if (!sel.rangeCount || inWrap(sel.anchorNode) || inWrap(sel.focusNode)) {
+      hint('A new paragraph cannot start inside bold, italic or a footnote'); return;
+    }
+    // A new paragraph (or bullet): becomes its own block after saving.
+    const raw = kind === 'item' ? '\n\\item ' : '\n\n';
+    document.execCommand('insertHTML', false,
+      `<span class="atom parbreak" contenteditable="false" data-raw="${raw.replace(/\n/g, '&#10;').replace(/\\/g, '&#92;')}" title="New ${kind === 'item' ? 'bullet' : 'paragraph'} starts here">¶</span>`);
+    refreshDirty();
+  }
+});
+sheet.addEventListener('paste', e => {
+  e.preventDefault();
+  const t = (e.clipboardData.getData('text/plain') || '').replace(/\s*\n\s*/g, ' ');
+  if (t) document.execCommand('insertText', false, t);
+});
+sheet.addEventListener('drop', e => e.preventDefault());
+sheet.addEventListener('mousedown', e => {
+  const el = regionOf(e.target);
+  if (el) setTimeout(() => showInPdf(regions.get(el.dataset.id)), 0);
+});
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if ((e.metaKey || e.ctrlKey) && k === 's') { e.preventDefault(); save(); }
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (k === 'b' || k === 'i' || k === 'u') && editableRegion(e.target)) {
+    e.preventDefault(); applyFormat(k);
+  }
+});
+window.addEventListener('beforeunload', e => { if (dirtyList().length) { e.preventDefault(); e.returnValue = ''; } });
+$('showraw').addEventListener('change', e => document.body.classList.toggle('showraw', e.target.checked));
+
+// ---------------------------------------------------------------- load / save
+async function loadDoc(keepScroll) {
+  const top = edpane.scrollTop;
+  doc = await getJSON('/api/doc?paper=' + enc(paper));
+  texMacros = doc.macros || {};
+  renderDoc();
+  undoBtn.hidden = !doc.can_revert;
+  edpane.scrollTop = keepScroll ? top : 0;
+}
+function buildReport(b) {
+  if (!b) return;
+  if (b.ok) {
+    setStatus('Saved', 'ok');
+    setBuild(`Up to date · compiled in ${b.seconds} s` + (b.by === 'watcher' ? ' by watch.sh' : ''), 'ok');
+    if (b.warnings && b.warnings.length)
+      showPanel('<b>Compiled, but the layout check has notes:</b><pre>' + escHTML(b.warnings.join('\n')) +
+        '</pre><div class="row"><button class="btn" id="dismiss">Dismiss</button></div>', 'warn');
+    else hidePanel();
+  } else {
+    setStatus('Saved, but LaTeX could not compile it', 'bad');
+    setBuild('Did not compile · showing the last good PDF', 'bad');
+    showPanel('<b>LaTeX could not compile main.tex.</b><pre>' + escHTML((b.errors || []).join('\n')) +
+      '</pre><div class="row">' + (doc.can_revert ? '<button class="btn" id="revert">Undo that save</button>' : '') +
+      '<button class="btn" id="dismiss">Dismiss</button><span>The full log is in build.log.</span></div>');
+  }
+}
+panel.addEventListener('click', e => {
+  if (e.target.id === 'dismiss') hidePanel();
+  if (e.target.id === 'revert') revert();
+});
+// Saving is two steps. Writing main.tex is quick; the page is frozen only for
+// that moment, so nothing typed can be lost. Compiling then runs while you
+// keep typing; edits made meanwhile simply stay unsaved (orange).
+let building = false, buildAgain = false, againSince = null;
+function freeze(on) { busy = on; sheet.inert = on; saveBtn.disabled = on; undoBtn.disabled = on; }
+function focusedRegionIndex() {
+  const el = regionOf(document.activeElement);
+  return el ? [...sheet.querySelectorAll('.region')].indexOf(el) : -1;
+}
+async function save() {
+  if (busy || !paper) return;
+  freeze(true);
+  const edits = dirtyList();
+  const where = focusedRegionIndex();
+  let res;
+  try {
+    setStatus(edits.length ? 'Saving…' : 'Compiling…');
+    res = await postJSON('/api/save', {paper, edits, build: false});
+    if (res.error) {
+      setStatus('Not saved: your edits are still here', 'bad');
+      showPanel('<b>Not saved.</b> ' + escHTML(res.error) + ' Nothing was written to main.tex; your edits are still on the page.<div class="row"><button class="btn" id="dismiss">Dismiss</button></div>');
+      return;
+    }
+    if (edits.length) {
+      await loadDoc(true);
+      const r = sheet.querySelectorAll('.region')[where];
+      if (r && r.contentEditable === 'true') r.focus({preventScroll: true});
+    }
+  } catch (err) {
+    setStatus('Could not reach the editor server: ' + err.message + ' (nothing saved; your edits are still here)', 'bad');
+    return;
+  } finally { freeze(false); }
+  compile(res.saved_at || null, edits.length ? 'Saved. Compiling…' : 'Compiling…');
+}
+async function compile(since, msg) {
+  if (building) { buildAgain = true; againSince = since; setStatus('Saved. Will compile again when the current build finishes…'); return; }
+  building = true;
+  setStatus(msg);
+  setBuild('Compiling…', 'busy');
+  try {
+    const res = await postJSON('/api/build', {paper, since});
+    await loadPdf(true);
+    if (res.error) { setStatus('Compile failed: ' + res.error, 'bad'); setBuild('Compile failed', 'bad'); return; }
+    if (!refreshDirty() || !res.build.ok) buildReport(res.build);
+    else { setStatus('Saved'); setBuild(`Up to date with the last save · ${res.build.seconds} s`, 'ok'); }
+  } catch (err) {
+    setStatus('Saved, but could not reach the server to compile: ' + err.message, 'bad');
+    setBuild('Not compiled', 'bad');
+  } finally {
+    building = false;
+    if (buildAgain) { buildAgain = false; compile(againSince, 'Compiling the latest save…'); }
+  }
+}
+async function revert() {
+  if (busy) return;
+  if (dirtyList().length && !confirm('Undo the last save? Your unsaved edits on this page will be lost.')) return;
+  freeze(true);
+  let res;
+  try {
+    setStatus('Undoing the last save…');
+    res = await postJSON('/api/revert', {paper, build: false});
+    if (res.error) { setStatus(res.error, 'bad'); return; }
+    await loadDoc(true);
+    hidePanel();
+  } catch (err) { setStatus('Could not reach the editor server: ' + err.message, 'bad'); return; }
+  finally { freeze(false); }
+  compile(res.saved_at || null, 'Last save undone. Compiling…');
+}
+saveBtn.addEventListener('click', save);
+undoBtn.addEventListener('click', revert);
+
+// main.tex or main.pdf changed by something else (VS Code, watch.sh, Claude)
+setInterval(async () => {
+  if (busy || !doc || document.hidden) return;
+  try {
+    const s = await getJSON('/api/stat?paper=' + enc(paper));
+    if (busy) return;
+    if (s.mtime !== doc.mtime) {
+      if (dirtyList().length) {
+        doc.mtime = s.mtime;
+        showPanel('<b>main.tex was changed by another program.</b> Your unsaved edits here are kept; saving will merge them into the new file where the paragraphs can still be found.<div class="row"><button class="btn" id="dismiss">Dismiss</button></div>', 'warn');
+      } else { await loadDoc(true); setStatus('Reloaded: main.tex changed on disk'); }
+    }
+    if (s.pdf_mtime !== pdfStamp && !busy && !building) await loadPdf(true);
+  } catch (e) { /* server stopped */ }
+}, 2500);
+
+// ---------------------------------------------------------------- PDF pane
+const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
+async function renderPage(p) {
+  if (p.rendered) return;
+  p.rendered = true;
+  const vp = p.page.getViewport({scale: pdfScale * dpr()});
+  const c = document.createElement('canvas');
+  c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+  await p.page.render({canvasContext: c.getContext('2d'), viewport: vp}).promise;
+  p.div.prepend(c);
+}
+let pageObserver = null;
+async function loadPdf(keep) {
+  const top = pdfpane.scrollTop;
+  let stamp = 0;
+  try { stamp = (await getJSON('/api/stat?paper=' + enc(paper))).pdf_mtime; } catch (e) {}
+  pdfStamp = stamp;
+  if (!stamp) {
+    pagesEl.innerHTML = '<div id="nopdf">No main.pdf yet. Press Recompile to build it.</div>';
+    pages = []; return;
+  }
+  let next;
+  try { next = await pdfjsLib.getDocument({url: `/api/pdf?paper=${enc(paper)}&t=${stamp}`}).promise; }
+  catch (e) { return; }      // caught mid-write; the next poll retries
+  const first = await next.getPage(1);
+  const width = Math.max(200, pdfpane.clientWidth - 30);
+  pdfScale = width / first.getViewport({scale: 1}).width;
+  const list = [];
+  const frag = document.createDocumentFragment();
+  let y = 0;
+  for (let i = 1; i <= next.numPages; i++) {
+    const page = i === 1 ? first : await next.getPage(i);
+    const v = page.getViewport({scale: pdfScale});
+    const div = document.createElement('div');
+    div.className = 'page';
+    div.style.width = v.width + 'px'; div.style.height = v.height + 'px';
+    div.dataset.n = i;
+    const p = {n: i, page, div, vp1: page.getViewport({scale: 1}), rendered: false, items: null, top: y, height: v.height};
+    y += v.height + 12;
+    list.push(p); frag.appendChild(div);
+  }
+  // Draw what will be on screen before swapping, so the view does not blank.
+  const from = keep ? top : 0;
+  await Promise.all(list.filter(p => p.top + p.height > from - 200 && p.top < from + pdfpane.clientHeight + 200).map(renderPage));
+  if (pageObserver) pageObserver.disconnect();
+  pageObserver = new IntersectionObserver(es => {
+    for (const e of es) if (e.isIntersecting) renderPage(list[e.target.dataset.n - 1]);
+  }, {root: pdfpane, rootMargin: '900px'});
+  pagesEl.replaceChildren(frag);
+  pagesEl.style.width = width + 'px';
+  pdfpane.scrollTop = from;
+  for (const p of list) pageObserver.observe(p.div);
+  const old = pdf;
+  pdf = next; pages = list;
+  if (old) old.destroy();
+  indexText(list);
+}
+// Text of each page with positions, for click-to-find in both directions.
+async function indexText(list) {
+  for (const p of list) {
+    if (pages !== list) return;
+    try { await pageItems(p); } catch (e) { return; }
+  }
+}
+async function pageItems(p) {
+  if (p.items) return p.items;
+  const tc = await p.page.getTextContent();
+  const items = [];
+  for (const it of tc.items) {
+    if (!it.str || !it.str.trim()) continue;
+    const [x, y] = p.vp1.convertToViewportPoint(it.transform[4], it.transform[5]);
+    const h = it.height || Math.hypot(it.transform[2], it.transform[3]) || 10;
+    items.push({str: it.str, x, y, w: it.width, h});
+  }
+  p.items = items;
+  p.triAt = new Map();
+  const seq = [];
+  items.forEach((it, i) => { for (const w of wordsOf(it.str)) seq.push([w, i]); });
+  for (let i = 0; i + 2 < seq.length; i++) {
+    const k = seq[i][0] + ' ' + seq[i + 1][0] + ' ' + seq[i + 2][0];
+    if (!p.triAt.has(k)) p.triAt.set(k, seq[i][1]);
+  }
+  return items;
+}
+function hint(text) {
+  const h = $('hint'); h.textContent = text; h.classList.add('show');
+  clearTimeout(hint.t); hint.t = setTimeout(() => h.classList.remove('show'), 2200);
+}
+
+// Click in the PDF -> the paragraph in the editor.
+pagesEl.addEventListener('click', async e => {
+  const div = e.target.closest('.page');
+  if (!div) return;
+  const p = pages[div.dataset.n - 1];
+  const box = div.getBoundingClientRect();
+  const x = (e.clientX - box.left) / pdfScale, y = (e.clientY - box.top) / pdfScale;
+  const items = await pageItems(p);
+  let best = -1, bd = 1e9;
+  items.forEach((it, i) => {
+    const dx = x < it.x ? it.x - x : x > it.x + it.w ? x - it.x - it.w : 0;
+    const dy = y < it.y - it.h ? it.y - it.h - y : y > it.y + it.h * 0.3 ? y - it.y - it.h * 0.3 : 0;
+    const d = Math.hypot(dx, dy * 2);
+    if (d < bd) { bd = d; best = i; }
+  });
+  if (best < 0 || bd > 40) return;
+  const hit = items[best];
+  const line = items.filter(it => Math.abs(it.y - hit.y) < hit.h * 0.5);
+  const lineWords = wordsOf(line.map(it => it.str).join(' '));
+  const ctxWords = wordsOf(items.slice(Math.max(0, best - 10), best + 11).map(it => it.str).join(' '));
+  const lt = trigrams(lineWords), ct = trigrams(ctxWords);
+  let top = null, score = 0;
+  for (const r of regions.values()) {
+    let s = 0;
+    for (const t of lt) if (r.tri.has(t)) s += 3;
+    for (const t of ct) if (r.tri.has(t)) s += 1;
+    if (s > score) { score = s; top = r; }
+  }
+  if (!top) {
+    const j = lineWords.join('');
+    if (j.length >= 4) {
+      const c = [...regions.values()].filter(r => r.joined.includes(j));
+      top = c.find(r => r.joined === j) || c.find(r => /^h|title/.test(r.item.kind)) || c[0] || null;
+    }
+  }
+  if (!top) { hint('That part of the PDF is not editable text (table, figure, reference list or front matter)'); return; }
+  // the word that was clicked, with its neighbours, to place the cursor
+  const frac = hit.w ? Math.min(1, Math.max(0, (x - hit.x) / hit.w)) : 0;
+  const ci = Math.round(frac * hit.str.length);
+  const ws = [...hit.str.matchAll(/[\p{L}\p{N}]+/gu)];
+  let wi = ws.findIndex(m => m.index + m[0].length >= ci);
+  if (wi < 0) wi = ws.length - 1;
+  goTo(top, ws[wi] ? ws[wi][0] : null, ws[wi - 1] ? ws[wi - 1][0] : null, ws[wi + 1] ? ws[wi + 1][0] : null);
+});
+function goTo(rec, word, prev, next) {
+  const el = rec.el;
+  el.scrollIntoView({block: 'center', behavior: 'smooth'});
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  if (el.contentEditable !== 'true') return;
+  el.focus({preventScroll: true});
+  if (!word) return;
+  // text nodes of the region, skipping chips
+  const nodes = [];
+  const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+    acceptNode: n => n.parentElement.closest('.atom') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+  let full = '';
+  while (tw.nextNode()) { nodes.push([tw.currentNode, full.length]); full += tw.currentNode.data; }
+  const low = full.toLowerCase(), w = word.toLowerCase();
+  let bestAt = -1, bestScore = -1, from = 0;
+  for (;;) {
+    const at = low.indexOf(w, from);
+    if (at < 0) break;
+    let s = 0;
+    if (prev && low.slice(Math.max(0, at - prev.length - 3), at).includes(prev.toLowerCase())) s += 2;
+    if (next && low.slice(at + w.length, at + w.length + next.length + 3).includes(next.toLowerCase())) s += 2;
+    if (!/[a-z]/.test(low[at - 1] || ' ') && !/[a-z]/.test(low[at + w.length] || ' ')) s += 1;
+    if (s > bestScore) { bestScore = s; bestAt = at; }
+    from = at + 1;
+  }
+  if (bestAt < 0) return;
+  const locate = off => {
+    for (let i = nodes.length - 1; i >= 0; i--) if (nodes[i][1] <= off) return [nodes[i][0], off - nodes[i][1]];
+    return [nodes[0][0], 0];
+  };
+  const [n1, o1] = locate(bestAt), [n2, o2] = locate(bestAt + w.length);
+  const range = document.createRange();
+  range.setStart(n1, o1);
+  range.setEnd(n2, Math.min(o2, n2.data.length));
+  const sel = getSelection();
+  sel.removeAllRanges(); sel.addRange(range);
+}
+
+// Click in the editor -> the place in the PDF.
+function showInPdf(rec) {
+  if (!rec || !pages.length) return;
+  const tri = trigrams(rec.words).slice(0, 60);
+  let bestP = null, bestN = 0;
+  if (tri.length) {
+    for (const p of pages) {
+      if (!p.triAt) continue;
+      let n = 0;
+      for (const t of tri) if (p.triAt.has(t)) n++;
+      if (n > bestN) { bestN = n; bestP = p; }
+    }
+  }
+  if (!bestP || bestN < Math.min(2, tri.length)) return;
+  let idx = null;
+  for (const t of tri) if (bestP.triAt.has(t)) { idx = bestP.triAt.get(t); break; }
+  const it = bestP.items[idx];
+  const yTop = bestP.div.offsetTop + (it.y - it.h) * pdfScale;
+  const view = pdfpane.scrollTop, hgt = pdfpane.clientHeight;
+  if (yTop < view + 20 || yTop > view + hgt - 60) pdfpane.scrollTo({top: Math.max(0, yTop - hgt * 0.3), behavior: 'smooth'});
+  let m = bestP.div.querySelector('.marker');
+  if (!m) { m = document.createElement('div'); m.className = 'marker'; bestP.div.appendChild(m); }
+  m.style.top = (it.y - it.h) * pdfScale + 'px';
+  m.style.height = Math.max(14, it.h * 1.3 * pdfScale) + 'px';
+  m.classList.add('on');
+  clearTimeout(m.t); m.t = setTimeout(() => m.classList.remove('on'), 900);
+}
+
+// ---------------------------------------------------------------- divider
+const divider = $('divider');
+divider.addEventListener('mousedown', e => {
+  e.preventDefault();
+  divider.classList.add('drag');
+  const move = ev => { edpane.style.flexBasis = Math.min(Math.max(ev.clientX, 260), innerWidth - 280) + 'px'; };
+  const up = () => {
+    divider.classList.remove('drag');
+    removeEventListener('mousemove', move); removeEventListener('mouseup', up);
+    try { localStorage.setItem('split', edpane.style.flexBasis); } catch (e) {}
+    if (paper) loadPdf(true);
+  };
+  addEventListener('mousemove', move); addEventListener('mouseup', up);
+});
+let rz;
+addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => paper && loadPdf(true), 250); });
+
+// ---------------------------------------------------------------- start
+async function openPaper(name) {
+  paper = name;
+  hidePanel();
+  setStatus('Loading…');
+  history.replaceState(null, '', '?paper=' + enc(name));
+  try { localStorage.setItem('paper', name); } catch (e) {}
+  document.title = name.replace(/_/g, ' ') + ' · Manuscript editor';
+  await loadDoc(false);
+  setStatus('Click any text to edit it. Click the PDF to jump to that paragraph.');
+  setBuild('');
+  await loadPdf(false);
+}
+(async () => {
+  try { const s = localStorage.getItem('split'); if (s) edpane.style.flexBasis = s; } catch (e) {}
+  const {papers, default: dflt} = await getJSON('/api/papers');
+  const sel = $('paper');
+  for (const p of papers) { const o = document.createElement('option'); o.value = p.name; o.textContent = p.name.replace(/_/g, ' '); sel.appendChild(o); }
+  let want = new URLSearchParams(location.search).get('paper') || dflt;
+  try { want = want || localStorage.getItem('paper'); } catch (e) {}
+  if (!papers.some(p => p.name === want)) want = papers[0] && papers[0].name;
+  if (!want) { setStatus('No papers found (a paper is a folder with a main.tex).', 'bad'); return; }
+  sel.value = want;
+  sel.addEventListener('change', () => {
+    if (dirtyList().length && !confirm('You have unsaved edits in this paper. Switch anyway and lose them?')) { sel.value = paper; return; }
+    openPaper(sel.value);
+  });
+  openPaper(want).catch(err => setStatus(err.message, 'bad'));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+\documentclass{article}
+\usepackage{amsmath}
+\title{An Example Paper for the \LaTeX{} Editor Tests}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This abstract has \textbf{bold}, \emph{italic} and a citation \citep{smith2020}.
+It also has 50\% of the escapes: a\_b, \& and \#1.
+\end{abstract}
+
+\section{Introduction}\label{sec:intro}
+Plain prose with a reference to Section~\ref{sec:intro} and maths $x^2 + y_i$
+at 10\,k$\Omega$ and 5\textmu s. A line break here\\
+then more text, and a footnote\footnote{With its own \emph{words}.} too.
+% a comment line on its own
+A paragraph that ends with a trailing comment. % keep me
+
+\subsection{Lists}
+\begin{itemize}
+\item First bullet with \textbf{bold text} inside it.
+\item[Label] Second bullet with a label and $\alpha = 0.05$.
+\end{itemize}
+
+\begin{equation}
+E = mc^2 \label{eq:e}
+\end{equation}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{missing_figure}
+\caption{A caption with \textit{italics} and a citation \citep{jones2019}.}
+\label{fig:one}
+\end{figure}
+
+\begin{table}[h]
+\caption{A table caption that is editable prose.}
+\begin{tabular}{ll}
+a & b \\
+\end{tabular}
+\end{table}
+
+Final paragraph with a URL \url{https://example.org} and accents: caf\'e, na\"ive.
+
+\end{document}
