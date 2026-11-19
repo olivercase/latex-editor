@@ -19,6 +19,8 @@ A *paper* is any sub-folder of the root that has a `main.tex`. Builds use `tecto
 - Typed `% & _ # $ { } \ ~ ^` are escaped for you.
 - Click the PDF to jump to that paragraph. Click a paragraph to see where it is in the PDF.
 - A failed build shows the LaTeX error and leaves the last good PDF in place. **Undo last save** restores the previous `main.tex`.
+- **Comments.** Every `\reviewnote{who}{tag}{text}` shows as a small marker in the text and is listed in the **Comments** panel (toolbar button). Click a comment in the panel to jump to it. Click a marker to read, edit or delete it. To add one, click in a paragraph or bullet (or select text) and press **Comment** (⌥⌘M); it is saved as `\reviewnote{Your name}{date}{text}`, which the house preamble turns into a PDF comment. Replies written as `| REPLY (Name): ...` show on their own line. LaTeX `%` comments show as grey markers and are kept as they are.
+- **Bold, italic, underline, superscript, subscript** follow Word's rule: if everything selected already has the format, the button removes it; otherwise it adds it.
 - Not editable here: tables, figures (captions are), equations, front matter, the reference list. Tick "Show LaTeX blocks" to see them.
 
 ## Why it cannot damage a paper
@@ -27,7 +29,7 @@ Every save goes through the same checks on the server before a byte is written. 
 
 1. **Only real paragraphs.** Each edit must replace a paragraph that the server itself finds in the current `main.tex`. If the file changed underneath, the paragraph is found again by its exact text, or the save is refused.
 2. **It reads back as what you saw.** The page sends both the LaTeX and a description of what it showed (words, chips, bold or italic). The server re-reads the LaTeX and requires the same thing. This catches the cases where typed text would change meaning in LaTeX: text after a trailing `% comment`, `[` or `*` after `\\` or `\item`, and a letter after `\textmu`. The page inserts the guards (`{}` or a newline) itself; the check makes sure it did.
-3. **Balanced, and nothing new.** The new LaTeX must have balanced braces and maths and no `\begin`/`\end`. It may contain only chips that were already in that paragraph, plus the editor's own `\textbf{` and friends, paragraph breaks and `\item`. Paragraph breaks are refused inside a wrapper and in headings and captions.
+3. **Balanced, and nothing new.** The new LaTeX must have balanced braces and maths and no `\begin`/`\end`. It may contain only chips that were already in that paragraph, plus the editor's own `\textbf{` and friends, paragraph breaks, `\item`, and new comments of exactly the form `\reviewnote{name}{tag}{plain text}` (only in paragraphs and bullets, only if the paper defines `\reviewnote`). Paragraph breaks are refused inside a wrapper and in headings and captions.
 4. **Neighbours untouched.** After splicing, the whole file is parsed again, and every paragraph you did not edit must come back exactly as it was.
 5. **Safe writes.** One save at a time (lock); the file is re-read just before writing and the save is refused if it changed. The write is atomic (temp file, fsync, rename) and then read back. A copy of the previous file goes to `.backups/<paper>/` (the last 60 are kept; git-ignored).
 

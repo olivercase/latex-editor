@@ -1322,6 +1322,25 @@ def _atoms_and_wraps(tokens, atoms, wraps, depth=0):
     return ok
 
 
+NOTE_RE = re.compile(r"\\reviewnote\{([^{}\\%]{1,80})\}\{([^{}\\%]{0,40})\}\{(.*)\}", re.S)
+
+
+def safe_note(raw, lookup):
+    """True if raw is a comment the editor itself could have made:
+    \\reviewnote{name}{tag}{plain text}, with only escaped characters."""
+    if "reviewnote" not in lookup.macros or len(raw) > 4000:
+        return False
+    m = NOTE_RE.fullmatch(raw.strip())
+    if not m or "\n\n" in raw:
+        return False
+    try:
+        toks = tokenize(m.group(3), lookup)
+    except Lock:
+        return False
+    allowed = {"\\textbackslash", "\\textasciitilde", "\\textasciicircum", "~"}
+    return all(t[0] == "t" or (t[0] == "a" and _norm_raw(t[1]) in allowed) for t in toks)
+
+
 def check_edit(region, new, client_shape, lookup):
     """None if `new` may replace `region`, else the reason it may not."""
     if not isinstance(new, str) or "\r" in new or "\x00" in new:
@@ -1362,6 +1381,8 @@ def check_edit(region, new, client_shape, lookup):
             pool[a] -= 1
         elif a == "\\item" and kind != "item":
             return "a new bullet can only be made inside a list"
+        elif a.startswith("\\reviewnote") and kind in ("p", "item") and safe_note(a, lookup):
+            continue
         elif a not in NEW_ATOMS and a not in ESCAPE_ATOMS:
             return "it contains LaTeX that was not in the paragraph before: %s" % a[:60]
     for w in wraps:
@@ -1586,6 +1607,7 @@ def doc_payload(name):
     doc = Doc(src, Lookup(d))
     return {"paper": name, "hash": digest(src), "mtime": mtime(d / "main.tex"),
             "pdf_mtime": mtime(d / "main.pdf"), "items": doc.items,
+            "can_comment": "reviewnote" in doc.lookup.macros,
             "macros": {"\\" + k: v[1] for k, v in doc.lookup.macros.items()
                        if len(v[1]) < 2000 and "\\begin" not in v[1]},
             "can_revert": LAST_SAVE.get(name, (None, None))[1] == digest(src)}

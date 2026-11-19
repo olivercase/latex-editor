@@ -28,12 +28,18 @@ header { display: flex; align-items: center; gap: 10px; padding: 7px 12px; backg
 #paper:hover { border-color: var(--line); }
 .tools { display: flex; align-items: center; gap: 2px; padding: 0 8px; border-left: 1px solid var(--line); }
 .tool { width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
-  display: grid; place-items: center; color: var(--soft); font-size: 15px; padding: 0; }
+  display: inline-flex; align-items: center; justify-content: center; color: var(--soft); font-size: 15px; padding: 0; }
 .tool:hover { background: #f0efec; }
 .tool.on { background: var(--accent-soft); color: var(--accent); }
 .tool:disabled { opacity: .35; cursor: default; background: transparent; }
 .tool svg { width: 17px; height: 17px; }
 .tool sup, .tool sub { line-height: 0; }
+.tool.wide { width: auto; padding: 0 9px 0 7px; display: flex; gap: 5px; font-size: 12.5px; }
+#pop textarea, #pop input { width: 100%; font: inherit; border: 1px solid #dcd6bf; border-radius: 6px; padding: 6px 8px; background: #fff; }
+#pop textarea { min-height: 72px; resize: vertical; margin-top: 6px; }
+#pop .acts { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
+#pop .acts .btn { padding: 4px 11px; }
+#pop .acts .del { margin-right: auto; color: var(--bad); }
 .spacer { flex: 1; }
 #savestate { color: var(--muted); white-space: nowrap; font-size: 12.5px; }
 #savestate.dirty { color: var(--dirty); }
@@ -53,7 +59,30 @@ kbd { font: inherit; opacity: .7; margin-left: 6px; font-weight: 400; }
 
 main { flex: 1; display: flex; min-height: 0; }
 #edpane, #pdfpane { overflow: auto; min-width: 260px; }
-#edpane { flex: 0 0 54%; padding: 28px 20px 80px; }
+#edpane { flex: 0 0 58%; padding: 28px 20px 80px; }
+#docwrap { display: flex; gap: 18px; justify-content: center; align-items: flex-start; }
+#docwrap #sheet { flex: 1 1 auto; margin: 0; min-width: 0; }
+body.showcomments #sheet { padding: 64px 64px 100px; }
+#pop .body { white-space: pre-line; }
+#comments { flex: 0 0 270px; position: sticky; top: 0; max-height: calc(100vh - 140px);
+  display: none; flex-direction: column; background: #f8f7f4; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+body.showcomments #comments { display: flex; }
+.chead { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--line); background: #fff; }
+.chead b { font-size: 13px; } .chead span { color: var(--muted); flex: 1; } .chead .tool { width: 24px; height: 24px; font-size: 17px; }
+#clist { overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 7px; }
+.ccard { background: #fff; border: 1px solid #e7e3d6; border-left: 3px solid var(--note); border-radius: 7px; padding: 8px 10px; cursor: pointer;
+  font-size: 12.5px; line-height: 1.45; }
+.ccard:hover { border-color: #d9cf9f; border-left-color: #e2b92a; }
+.ccard.active { box-shadow: 0 0 0 2px var(--accent); }
+.ccard.latex { border-left-color: #c9c5bb; }
+.ccard .cm { display: flex; gap: 6px; align-items: baseline; margin-bottom: 3px; }
+.ccard .cm b { font-weight: 600; } .ccard .cm small { color: var(--muted); }
+.ccard .ct { white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; color: #33312d; }
+.ccard.active .ct { -webkit-line-clamp: unset; }
+.ccard .cx { margin-top: 4px; color: #9a968d; font-size: 11.5px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ccard.unsaved .cm small::after { content: " · not saved"; color: var(--dirty); }
+#clist .empty { color: var(--muted); padding: 14px 6px; text-align: center; }
+#showcomments.on { background: var(--accent-soft); color: var(--accent); }
 #pdfpane { flex: 1; padding: 0 14px 14px; position: relative; background: #e3e1dc; }
 #pdfhead { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; align-items: center; padding: 8px 2px;
   background: #e3e1dc; color: var(--muted); font-size: 12px; }
@@ -114,10 +143,17 @@ label.tog { display: flex; align-items: center; gap: 5px; cursor: pointer; white
 .atom.rawmath:not(.tex), .atom.cmd { font: 12px/1.3 ui-monospace, Menlo, monospace; background: #f1efea; color: #55524b;
   border-radius: 3px; padding: 1px 4px; white-space: normal; }
 .atom.tt { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background: none; padding: 0; }
-.atom.comment { display: inline-block; width: 0; overflow: hidden; vertical-align: top; }
+.atom.comment { display: inline-block; font: 600 9.5px/15px -apple-system, sans-serif; background: #e4e1da; color: #5f5b53;
+  border-radius: 3px 3px 3px 0; padding: 0 4px; margin: 0 2px; vertical-align: .55em; cursor: pointer; }
+.atom.note { cursor: pointer; }
+.atom.note.open, .atom.comment.open { outline: 2px solid var(--accent); outline-offset: 1px; }
+#pop { position: absolute; z-index: 20; max-width: 340px; background: #fffdf3; color: #2b2a27; border: 1px solid #e6dcb4;
+  border-radius: 8px; box-shadow: 0 6px 22px rgba(0,0,0,.16); padding: 10px 12px; font: 13px/1.45 -apple-system, sans-serif; display: none; }
+#pop.show { display: block; }
+#pop .who { font-weight: 600; margin-bottom: 4px; } #pop .who small { font-weight: 400; color: var(--muted); margin-left: 4px; }
+#pop.latex { background: #f7f6f3; border-color: #dedad2; } #pop .foot { margin-top: 7px; color: var(--muted); font-size: 11.5px; }
 .atom.parbreak { color: var(--dirty); font-family: -apple-system, sans-serif; font-size: .8em; padding: 0 3px; }
-body.showraw .atom.comment { width: auto; font: 11px/1 ui-monospace, Menlo, monospace; color: #9a968d;
-  background: #f3f1ec; border-radius: 3px; padding: 1px 3px; }
+
 .w-b, b, strong { font-weight: 700; } .w-i, i, em { font-style: italic; } .w-u, u { text-decoration: underline; }
 .w-sup { vertical-align: super; font-size: .72em; line-height: 0; }
 .w-sub { vertical-align: sub; font-size: .72em; line-height: 0; }
@@ -179,14 +215,20 @@ body.showraw .locked.raw { display: block; }
     <button class="tool" data-fmt="sup" title="Superscript" style="font-family:Georgia,serif;font-size:14px">x<sup style="font-size:9px">2</sup></button>
     <button class="tool" data-fmt="sub" title="Subscript" style="font-family:Georgia,serif;font-size:14px">x<sub style="font-size:9px">2</sub></button>
   </div>
+  <div class="tools">
+    <button class="tool wide" id="showcomments" title="Show or hide the comments panel"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 4.5h13v9h-7l-4 3v-3h-2z"/><path d="M7 8h6M7 10.5h4" stroke-linecap="round"/></svg><span id="ccount2">Comments</span></button>
+    <button class="tool wide" id="addcomment" title="Add a comment here (⌥⌘M)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 4.5h13v9h-7l-4 3v-3h-2z"/><path d="M10 7v4M8 9h4" stroke-linecap="round"/></svg><span>Comment</span></button>
+  </div>
   <div class="spacer"></div>
   <span id="savestate">All changes saved</span>
   <button id="undo" class="btn" hidden title="Put main.tex back to how it was before the last save">Undo last save</button>
   <button id="save" class="btn primary">Save<kbd>⌘S</kbd></button>
 </header>
 <div id="panel"></div>
+<div id="pop"></div>
 <main>
-  <section id="edpane"><div id="sheet"></div></section>
+  <section id="edpane"><div id="docwrap"><div id="sheet"></div>
+    <aside id="comments"><div class="chead"><b>Comments</b><span id="ccount"></span><button class="tool" id="cclose" title="Hide comments">×</button></div><div id="clist"></div></aside></div></section>
   <div id="divider"></div>
   <section id="pdfpane"><div id="pdfhead"><b>PDF</b><span id="buildstate"></span></div><div id="pages"></div><div id="hint"></div></section>
 </main>
@@ -504,7 +546,7 @@ function refreshDirty() {
   saveBtn.firstChild.textContent = n ? 'Save' : 'Recompile';
   saveState.textContent = n ? (n === 1 ? '1 paragraph not saved' : n + ' paragraphs not saved') : 'All changes saved';
   saveState.className = n ? 'dirty' : '';
-  clearTimeout(refreshDirty.t); refreshDirty.t = setTimeout(countWords, 300);
+  clearTimeout(refreshDirty.t); refreshDirty.t = setTimeout(() => { countWords(); refreshComments(); }, 300);
   return n;
 }
 
@@ -536,42 +578,134 @@ function snapToAtoms(range) {
 const hasText = frag => frag.textContent.length > 0 || frag.querySelector && frag.querySelector('.atom');
 function fragHTML(frag) { const d = document.createElement('div'); d.appendChild(frag); return d.innerHTML; }
 function shellHTML(wrap, frag) { const s = wrap.cloneNode(false); s.appendChild(frag); return s.outerHTML; }
+// Is every selected character already in this format? (Word's rule: then the
+// button removes it, otherwise it adds it.)
+function textNodesIn(range, region) {
+  const out = [];
+  const w = document.createTreeWalker(region, NodeFilter.SHOW_TEXT, {
+    acceptNode: n => n.parentElement.closest('.atom') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+  let n;
+  while ((n = w.nextNode())) {
+    if (!range.intersectsNode(n)) continue;
+    const a = n === range.startContainer ? range.startOffset : 0;
+    const b = n === range.endContainer ? range.endOffset : n.data.length;
+    if (n.data.slice(a, b).trim()) out.push(n);
+  }
+  return out;
+}
+function allFormatted(range, region, f) {
+  const nodes = textNodesIn(range, region);
+  return nodes.length > 0 && nodes.every(n => fmtAncestor(n, f, region));
+}
+function topChild(region, node) {
+  while (node && node.parentNode !== region) node = node.parentNode;
+  return node;
+}
+function pathFrom(top, node) {          // child indexes from `top` down to `node`
+  const p = [];
+  for (let n = node; n !== top; n = n.parentNode) p.unshift([...n.parentNode.childNodes].indexOf(n));
+  return p;
+}
+function nodeAt(root, path) { let n = root; for (const i of path) n = n.childNodes[i]; return n; }
+function placeMarker(node, offset, marker) {
+  if (node.nodeType === 3) {
+    const rest = node.splitText(offset);
+    rest.parentNode.insertBefore(marker, rest);
+  } else node.insertBefore(marker, node.childNodes[offset] || null);
+}
+function removeFormat(range, region, f) {
+  // Work on a copy of the paragraph's top-level pieces the selection touches,
+  // then put it back with one insertHTML so ⌘Z undoes it in one step.
+  const first = topChild(region, range.startContainer.nodeType === 3 || range.startContainer !== region ? range.startContainer : region.childNodes[range.startOffset]);
+  const last = topChild(region, range.endContainer.nodeType === 3 || range.endContainer !== region ? range.endContainer : region.childNodes[Math.max(0, range.endOffset - 1)]);
+  if (!first || !last) return false;
+  // Rebuild the whole paragraph: if only part of it is replaced, Chrome
+  // keeps the emptied bold wrapper and types the text straight back into it.
+  const kids = [...region.childNodes];
+  const i0 = 0, i1 = kids.length - 1;
+  const box = document.createElement('div');
+  for (let i = i0; i <= i1; i++) box.appendChild(kids[i].cloneNode(true));
+  const mapPath = (node) => { const top = topChild(region, node) || node; const p = pathFrom(region, node); p[0] = kids.indexOf(top) - i0; return p; };
+  const m1 = document.createElement('i'), m2 = document.createElement('i');
+  m1.dataset.mark = '1'; m2.dataset.mark = '2';
+  // end first, so splitting a text node does not move the start
+  const sc = range.startContainer === region ? null : range.startContainer;
+  const ec = range.endContainer === region ? null : range.endContainer;
+  if (ec) placeMarker(nodeAt(box, mapPath(ec)), range.endOffset, m2); else box.appendChild(m2);
+  if (sc) placeMarker(nodeAt(box, mapPath(sc)), range.startOffset, m1); else box.insertBefore(m1, box.firstChild);
+  const isF = e => e.nodeType === 1 && !e.dataset.mark && (e.classList.contains(f.cls) || f.tags.includes(e.tagName));
+  const before = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  for (const e of [...box.querySelectorAll('*')].filter(isF)) {
+    if (!box.contains(e)) continue;
+    const endsBefore = before(e, m1) && !e.contains(m1);   // e is wholly before the selection
+    const startsAfter = before(m2, e) && !e.contains(m2);  // wholly after
+    if (endsBefore || startsAfter) continue;
+    const r = document.createRange();
+    let pre = null, post = null;
+    if (e.contains(m1)) { r.setStart(e, 0); r.setEndBefore(m1); pre = r.extractContents(); }
+    if (e.contains(m2)) { r.setStartAfter(m2); r.setEnd(e, e.childNodes.length); post = r.extractContents(); }
+    const frag = document.createDocumentFragment();
+    if (pre && hasText(pre)) { const s = e.cloneNode(false); s.appendChild(pre); frag.appendChild(s); }
+    while (e.firstChild) frag.appendChild(e.firstChild);
+    if (post && hasText(post)) { const s = e.cloneNode(false); s.appendChild(post); frag.appendChild(s); }
+    e.replaceWith(frag);
+  }
+  m1.remove(); m2.remove();
+  const whole = document.createRange();
+  whole.selectNodeContents(region);
+  const sel = getSelection(); sel.removeAllRanges(); sel.addRange(whole);
+  const kind = regions.get(region.dataset.id)?.item.kind;
+  const want = serShape(box, kind).latex;
+  const html = box.innerHTML;
+  document.execCommand('insertHTML', false, html || '\u200b');
+  // If Chrome changed what it inserted (it sometimes re-applies the old
+  // formatting), put the intended contents in directly.
+  if (serShape(region, kind).latex !== want) {
+    const fix = document.createElement('div'); fix.innerHTML = html;
+    region.replaceChildren(...fix.childNodes);
+  }
+  rerenderAtoms(region);
+  return true;
+}
+// Chrome may simplify the inline styles inside chips when it re-inserts
+// them; draw the maths again from the chip's own LaTeX.
+function rerenderAtoms(root) {
+  for (const a of root.querySelectorAll('.atom.tex[data-raw]')) {
+    const h = texHTML(texBody(a.dataset.raw), false);
+    if (h) a.innerHTML = h;
+    a.contentEditable = 'false';
+  }
+  for (const a of root.querySelectorAll('.atom')) a.contentEditable = 'false';
+}
 function applyFormat(key) {
   const f = FMT[key];
   const sel = getSelection();
   if (!sel.rangeCount) return;
   const range = sel.getRangeAt(0);
-  const region = editableRegion(range.startContainer);
+  const region = editableRegion(range.startContainer.nodeType === 1 && range.startContainer.classList?.contains('region') ? range.startContainer : range.startContainer);
   if (!region || editableRegion(range.endContainer) !== region) { hint('Select text inside one paragraph to format it'); return; }
   if (range.collapsed) { document.execCommand(f.native); refreshDirty(); updateTools(); return; }
   snapToAtoms(range);
-  const w1 = fmtAncestor(range.startContainer, f, region), w2 = fmtAncestor(range.endContainer, f, region);
-  if (w1 && w1 === w2) {
-    // remove: keep the formatting on the parts of the wrapper outside the selection
-    const before = document.createRange(); before.setStart(w1, 0); before.setEnd(range.startContainer, range.startOffset);
-    const after = document.createRange(); after.setStart(range.endContainer, range.endOffset); after.setEnd(w1, w1.childNodes.length);
-    const b = before.cloneContents(), m = range.cloneContents(), a = after.cloneContents();
-    const html = (hasText(b) ? shellHTML(w1, b) : '') + fragHTML(m) + (hasText(a) ? shellHTML(w1, a) : '');
-    const whole = document.createRange(); whole.selectNode(w1);
-    sel.removeAllRanges(); sel.addRange(whole);
-    document.execCommand('insertHTML', false, html);
-  } else {
+  if (allFormatted(range, region, f)) removeFormat(range, region, f);
+  else {
     const s = document.createElement('span');
     s.className = 'wrap ' + f.cls;
     s.dataset.pre = f.pre; s.dataset.suf = '}';
     s.appendChild(range.cloneContents());
     if (!s.textContent.trim()) return;
     document.execCommand('insertHTML', false, s.outerHTML);
+    rerenderAtoms(region);
   }
   refreshDirty(); updateTools();
 }
 function updateTools() {
   const sel = getSelection();
-  const node = sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
-  const region = editableRegion(node);
+  const range = sel.rangeCount ? sel.getRangeAt(0) : null;
+  const region = range && editableRegion(range.startContainer);
   for (const b of document.querySelectorAll('.tool[data-fmt]')) {
+    const f = FMT[b.dataset.fmt];
     b.disabled = !region || busy;
-    b.classList.toggle('on', !!(region && fmtAncestor(node, FMT[b.dataset.fmt], region)));
+    b.classList.toggle('on', !!region && (range.collapsed ? !!fmtAncestor(range.startContainer, f, region) : allFormatted(range, region, f)));
   }
 }
 document.addEventListener('selectionchange', () => { clearTimeout(updateTools.t); updateTools.t = setTimeout(updateTools, 60); });
@@ -587,6 +721,164 @@ function countWords() {
   for (const r of regions.values()) n += (r.el.textContent.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length;
   wordsEl.textContent = n.toLocaleString() + ' words';
 }
+
+// ---------------------------------------------------------------- comments
+// \reviewnote{who}{id}{text} and "% ..." comments are kept exactly as they are;
+// click the marker to read one.
+const pop = $('pop');
+const texToText = t => t.replace(/\\(?:textit|emph|textbf|text)\{([^{}]*)\}/g, '$1').replace(/\\([%&#_$])/g, '$1')
+  .replace(/~/g, ' ').replace(/\\,/g, ' ').replace(/\s+/g, ' ').trim().replace(/\s*\|\s*(REPLY\b[^:]*:)\s*/g, '\n↳ $1 ');
+const latexText = t => t.replace(/\s*\n↳\s*/g, ' | ').replace(/\s+/g, ' ').trim().replace(/[%&#_${}\\~^]/g, c => ESC[c]);
+const cleanName = t => t.replace(/[{}\\%]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+const initialsOf = n => (n.match(/[\p{L}]+/gu) || []).slice(0, 3).map(w => w[0]).join('').toUpperCase() || '•';
+const today = () => new Date().toISOString().slice(0, 10);
+let myName = ''; try { myName = localStorage.getItem('commentName') || ''; } catch (e) {}
+function placePop(rect) {
+  pop.classList.add('show');
+  const w = pop.offsetWidth;
+  pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, rect.left + scrollX - 10)) + 'px';
+  pop.style.top = (rect.bottom + scrollY + 6) + 'px';
+}
+function button(text, cls, fn) { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = text; b.addEventListener('click', fn); return b; }
+function showComment(a) {
+  closeComment();
+  const raw = a.dataset.raw;
+  pop.className = '';
+  pop.replaceChildren();
+  const who = document.createElement('div'); who.className = 'who';
+  const m = raw.match(/^\\reviewnote\{([^{}]*)\}\{([^{}]*)\}\{([\s\S]*)\}\s*$/);
+  const region = regionOf(a);
+  const editable = region && region.contentEditable === 'true' && !busy;
+  if (m) {
+    who.textContent = m[1]; const sm = document.createElement('small'); sm.textContent = m[2]; who.appendChild(sm);
+    pop.appendChild(who);
+    if (editable) {
+      const ta = document.createElement('textarea'); ta.value = texToText(m[3]);
+      const acts = document.createElement('div'); acts.className = 'acts';
+      acts.append(
+        button('Delete', 'del', () => { closeComment(); const r = document.createRange(); r.selectNode(a); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); document.execCommand('delete'); refreshDirty(); }),
+        button('Cancel', '', closeComment),
+        button('Save comment', 'primary', () => {
+          const t = ta.value.trim(); if (!t) return;
+          if (texToText(m[3]) !== t) { a.dataset.raw = `\\reviewnote{${m[1]}}{${m[2]}}{${latexText(t)}}`; a.title = `${m[1]} (${m[2]}): ${t}`; }
+          closeComment(); refreshDirty();
+        }));
+      pop.append(ta, acts);
+      placePop(a.getBoundingClientRect()); ta.focus();
+    } else {
+      const body = document.createElement('div'); body.className = 'body'; body.textContent = texToText(m[3]); pop.appendChild(body);
+      placePop(a.getBoundingClientRect());
+    }
+  } else {
+    pop.classList.add('latex'); who.textContent = 'LaTeX comment';
+    const body = document.createElement('div'); body.textContent = raw.replace(/^\s*%+\s?/, '').trim();
+    const foot = document.createElement('div'); foot.className = 'foot'; foot.textContent = 'A % comment in main.tex; it does not appear in the PDF.';
+    pop.append(who, body, foot);
+    placePop(a.getBoundingClientRect());
+  }
+  a.classList.add('open');
+  showComment.cur = a;
+  for (const c of clist.querySelectorAll('.active')) c.classList.remove('active');
+  if (a._card) { a._card.classList.add('active'); a._card.scrollIntoView({block: 'nearest'}); }
+}
+function composeComment() {
+  const sel = getSelection();
+  const range = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+  const region = range && editableRegion(range.endContainer);
+  const kind = region && regions.get(region.dataset.id)?.item.kind;
+  if (!region || (kind !== 'p' && kind !== 'item')) { hint('Click in a paragraph or bullet first (comments cannot go in headings or captions)'); return; }
+  if (!doc.can_comment) { hint('This paper does not define \\reviewnote, so comments cannot be added here'); return; }
+  snapToAtoms(range);
+  range.collapse(false);
+  closeComment();
+  pop.className = ''; pop.replaceChildren();
+  const who = document.createElement('div'); who.className = 'who'; who.textContent = 'New comment';
+  const name = document.createElement('input'); name.placeholder = 'Your name'; name.value = myName;
+  const ta = document.createElement('textarea'); ta.placeholder = 'Comment';
+  const acts = document.createElement('div'); acts.className = 'acts';
+  const add = () => {
+    const n = cleanName(name.value), t = ta.value.trim();
+    if (!n) { name.focus(); return; }
+    if (!t) { ta.focus(); return; }
+    myName = n; try { localStorage.setItem('commentName', n); } catch (e) {}
+    const raw = `\\reviewnote{${n}}{${today()}}{${latexText(t)}}`;
+    const span = document.createElement('span');
+    span.className = 'atom note'; span.contentEditable = 'false'; span.dataset.raw = raw;
+    span.textContent = initialsOf(n); span.title = `${n} (${today()}): ${t}`;
+    closeComment();
+    region.focus({preventScroll: true});
+    sel.removeAllRanges(); sel.addRange(range);
+    document.execCommand('insertHTML', false, span.outerHTML);
+    rerenderAtoms(region);
+    refreshDirty();
+  };
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); } });
+  acts.append(button('Cancel', '', closeComment), button('Add comment', 'primary', add));
+  pop.append(who, name, ta, acts);
+  const r = range.getBoundingClientRect();
+  placePop(r.width || r.height ? r : region.getBoundingClientRect());
+  (myName ? ta : name).focus();
+}
+$('addcomment').addEventListener('mousedown', e => e.preventDefault());
+$('addcomment').addEventListener('click', composeComment);
+document.addEventListener('keydown', e => { if (e.altKey && (e.metaKey || e.ctrlKey) && e.code === 'KeyM') { e.preventDefault(); composeComment(); } });
+function closeComment() { pop.className = ''; if (showComment.cur) showComment.cur.classList.remove('open'); showComment.cur = null; }
+sheet.addEventListener('click', e => {
+  const a = e.target.closest('.atom.note, .atom.comment');
+  if (a) { e.preventDefault(); showComment.cur === a ? closeComment() : showComment(a); }
+  else if (!pop.contains(e.target)) closeComment();
+});
+edpane.addEventListener('scroll', () => { if (!pop.contains(document.activeElement)) closeComment(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeComment(); });
+
+// ---------------------------------------------------------------- comments panel
+const clist = $('clist');
+function noteParts(raw) {
+  const m = raw.match(/^\\reviewnote\{([^{}]*)\}\{([^{}]*)\}\{([\s\S]*)\}\s*$/);
+  return m ? {who: m[1], tag: m[2], text: texToText(m[3])} : {who: 'LaTeX comment', tag: '', text: raw.replace(/^\s*%+\s?/, '').trim(), latex: true};
+}
+function contextOf(a) {
+  const r = regionOf(a);
+  if (!r) return '';
+  const range = document.createRange(); range.setStart(r, 0); range.setEndBefore(a);
+  const t = range.toString().replace(/\s+/g, ' ').trim();
+  return t ? '…' + t.slice(-60) : '';
+}
+function refreshComments() {
+  const atoms = [...sheet.querySelectorAll('.atom.note, .atom.comment')];
+  const n = atoms.filter(a => a.classList.contains('note')).length;
+  $('ccount').textContent = n + (atoms.length > n ? ` + ${atoms.length - n} LaTeX` : '');
+  $('ccount2').textContent = n ? `Comments (${n})` : 'Comments';
+  clist.replaceChildren();
+  if (!atoms.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'No comments yet. Click in the text and press Comment to add one.'; clist.appendChild(e); return; }
+  for (const a of atoms) {
+    const p = noteParts(a.dataset.raw);
+    const card = document.createElement('div');
+    card.className = 'ccard' + (p.latex ? ' latex' : '') + (regionOf(a)?.classList.contains('dirty') ? ' unsaved' : '');
+    const head = document.createElement('div'); head.className = 'cm';
+    const b = document.createElement('b'); b.textContent = p.who; const sm = document.createElement('small'); sm.textContent = p.tag;
+    head.append(b, sm);
+    const t = document.createElement('div'); t.className = 'ct'; t.textContent = p.text;
+    const cx = document.createElement('div'); cx.className = 'cx'; cx.textContent = contextOf(a);
+    card.append(head, t, cx);
+    card.addEventListener('click', () => {
+      for (const c of clist.querySelectorAll('.active')) c.classList.remove('active');
+      card.classList.add('active');
+      a.scrollIntoView({block: 'center', behavior: 'smooth'});
+      setTimeout(() => showComment(a), 380);
+    });
+    a._card = card;
+    clist.appendChild(card);
+  }
+}
+function toggleComments(on) {
+  document.body.classList.toggle('showcomments', on);
+  $('showcomments').classList.toggle('on', on);
+  try { localStorage.setItem('showComments', on ? '1' : '0'); } catch (e) {}
+}
+$('showcomments').addEventListener('click', () => toggleComments(!document.body.classList.contains('showcomments')));
+$('cclose').addEventListener('click', () => toggleComments(false));
+(() => { let v = '1'; try { v = localStorage.getItem('showComments') ?? '1'; } catch (e) {} toggleComments(v === '1'); })();
 
 // ---------------------------------------------------------------- editing behaviour
 function regionOf(node) {
