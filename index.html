@@ -87,6 +87,11 @@ body.showcomments #comments { display: flex; }
 #pdfhead { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; align-items: center; padding: 8px 2px;
   background: #e3e1dc; color: var(--muted); font-size: 12px; }
 #pdfhead b { color: var(--soft); font-weight: 600; letter-spacing: .02em; }
+#synclink { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 1px solid transparent; background: none;
+  font: inherit; color: var(--muted); padding: 2px 8px; border-radius: 6px; cursor: pointer; }
+#synclink:hover { border-color: #c9c5bc; }
+#synclink.on { color: var(--accent); background: var(--accent-soft); }
+#synclink svg { width: 14px; height: 14px; }
 #buildstate.ok { color: var(--ok); } #buildstate.bad { color: var(--bad); } #buildstate.busy { color: var(--accent); }
 #divider { flex: 0 0 6px; cursor: col-resize; background: var(--line); }
 #divider:hover, #divider.drag { background: #b9b5ab; }
@@ -230,7 +235,7 @@ body.showraw .locked.raw { display: block; }
   <section id="edpane"><div id="docwrap"><div id="sheet"></div>
     <aside id="comments"><div class="chead"><b>Comments</b><span id="ccount"></span><button class="tool" id="cclose" title="Hide comments">×</button></div><div id="clist"></div></aside></div></section>
   <div id="divider"></div>
-  <section id="pdfpane"><div id="pdfhead"><b>PDF</b><span id="buildstate"></span></div><div id="pages"></div><div id="hint"></div></section>
+  <section id="pdfpane"><div id="pdfhead"><b>PDF</b><span id="buildstate"></span><button id="synclink" title="Scroll the text and the PDF together. Click to unlink them."></button></div><div id="pages"></div><div id="hint"></div></section>
 </main>
 <footer>
   <span id="words"></span>
@@ -1240,6 +1245,126 @@ function showInPdf(rec) {
   m.style.height = Math.max(14, it.h * 1.3 * pdfScale) + 'px';
   m.classList.add('on');
   clearTimeout(m.t); m.t = setTimeout(() => m.classList.remove('on'), 900);
+}
+
+
+// ---------------------------------------------------------------- linked scrolling
+// Each paragraph gives two anchors (its top and bottom in the editor, the
+// same words in the PDF). Scrolling one pane moves the other by straight-line
+// interpolation between anchors, so it lands on the same place.
+const SYNC_LINE = 0.33;              // which line of each pane is kept level
+let syncOn = true;
+try { syncOn = localStorage.getItem('syncScroll') !== 'off'; } catch (e) {}
+const syncBtn = $('synclink');
+const LINK_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8.5 11.5l3-3"/><path d="M9.5 6.5l1.3-1.3a3 3 0 0 1 4.2 4.2l-1.3 1.3M10.5 13.5l-1.3 1.3a3 3 0 0 1-4.2-4.2l1.3-1.3"/></svg>';
+const UNLINK_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M9.5 6.5l1.3-1.3a3 3 0 0 1 4.2 4.2l-1.3 1.3M10.5 13.5l-1.3 1.3a3 3 0 0 1-4.2-4.2l1.3-1.3"/><path d="M4 4l2 2M16 16l-2-2"/></svg>';
+function drawSyncBtn() {
+  syncBtn.classList.toggle('on', syncOn);
+  syncBtn.innerHTML = (syncOn ? LINK_ICON : UNLINK_ICON) + (syncOn ? 'Scroll linked' : 'Scroll unlinked');
+  syncBtn.title = syncOn ? 'Text and PDF scroll together. Click to unlink them.' : 'Text and PDF scroll on their own. Click to link them.';
+}
+drawSyncBtn();
+syncBtn.addEventListener('click', () => {
+  syncOn = !syncOn;
+  try { localStorage.setItem('syncScroll', syncOn ? 'on' : 'off'); } catch (e) {}
+  drawSyncBtn();
+  if (syncOn) { driver = edpane; syncFrom(edpane); }
+});
+
+// Where a run of words sits in the PDF, as a pdfpane scroll offset.
+function pdfYOf(tri, end) {
+  if (!tri.length) return null;
+  let bestP = null, bestN = 0;
+  for (const p of pages) {
+    if (!p.triAt) continue;
+    let n = 0;
+    for (const t of tri) if (p.triAt.has(t)) n++;
+    if (n > bestN) { bestN = n; bestP = p; }
+  }
+  if (!bestP || bestN < Math.min(3, tri.length)) return null;
+  const order = end ? [...tri].reverse() : tri;
+  for (const t of order) if (bestP.triAt.has(t)) {
+    const it = bestP.items[bestP.triAt.get(t)];
+    return bestP.div.offsetTop + (end ? it.y + it.h * 0.3 : it.y - it.h) * pdfScale;
+  }
+  return null;
+}
+let pdfAnchorCache = {pages: null, regions: null, done: false, list: []};
+function pdfAnchors() {
+  const c = pdfAnchorCache;
+  if (c.pages === pages && c.regions === regions && c.done) return c.list;
+  const done = pages.length > 0 && pages.every(p => p.triAt);
+  const list = [];
+  for (const rec of regions.values()) {
+    const tri = trigrams(rec.words);
+    if (tri.length < 3) continue;
+    const a = pdfYOf(tri.slice(0, 40), false), b = pdfYOf(tri.slice(-40), true);
+    if (a != null) list.push({rec, pdf: a, end: false});
+    if (b != null && (a == null || b > a)) list.push({rec, pdf: b, end: true});
+  }
+  pdfAnchorCache = {pages, regions, done, list};
+  return list;
+}
+// Anchors in both panes, both increasing. Floats (figures, tables) put some
+// text out of order in the PDF; the longest increasing run drops those.
+function syncAnchors() {
+  const eTop = edpane.getBoundingClientRect().top - edpane.scrollTop;
+  const raw = [];
+  for (const a of pdfAnchors()) {
+    const el = a.rec.el;
+    if (!el.isConnected || !el.offsetParent) continue;
+    const r = el.getBoundingClientRect();
+    raw.push([(a.end ? r.bottom : r.top) - eTop, a.pdf]);
+  }
+  raw.sort((x, y) => x[0] - y[0]);
+  // longest strictly increasing subsequence on the PDF coordinate
+  const tails = [], prev = new Array(raw.length);
+  for (let i = 0; i < raw.length; i++) {
+    let lo = 0, hi = tails.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (raw[tails[m]][1] < raw[i][1]) lo = m + 1; else hi = m; }
+    prev[i] = lo ? tails[lo - 1] : -1;
+    tails[lo] = i;
+  }
+  const out = [];
+  for (let i = tails.length ? tails[tails.length - 1] : -1; i >= 0; i = prev[i]) out.push(raw[i]);
+  out.reverse();
+  const edMax = edpane.scrollHeight, pdfMax = pdfpane.scrollHeight;
+  const anchors = [[0, 0]];
+  for (const a of out) if (a[0] > anchors[anchors.length - 1][0] && a[1] > anchors[anchors.length - 1][1]) anchors.push(a);
+  if (edMax > anchors[anchors.length - 1][0] && pdfMax > anchors[anchors.length - 1][1]) anchors.push([edMax, pdfMax]);
+  return anchors;
+}
+function mapY(anchors, y, from, to) {
+  let i = 1;
+  while (i < anchors.length - 1 && anchors[i][from] < y) i++;
+  const a = anchors[i - 1], b = anchors[i];
+  const f = b[from] > a[from] ? (y - a[from]) / (b[from] - a[from]) : 0;
+  return a[to] + Math.min(1, Math.max(0, f)) * (b[to] - a[to]);
+}
+let driver = null, syncQueued = false, expect = {pane: null, top: 0};
+function syncFrom(src) {
+  if (!syncOn || !paper || !pages.length || !regions.size) return;
+  const dst = src === edpane ? pdfpane : edpane;
+  const anchors = syncAnchors();
+  if (anchors.length < 3) return;
+  const y = src.scrollTop + src.clientHeight * SYNC_LINE;
+  const t = mapY(anchors, y, src === edpane ? 0 : 1, src === edpane ? 1 : 0) - dst.clientHeight * SYNC_LINE;
+  const top = Math.max(0, Math.min(dst.scrollHeight - dst.clientHeight, Math.round(t)));
+  if (Math.abs(dst.scrollTop - top) < 1) return;
+  expect = {pane: dst, top};
+  dst.scrollTop = top;
+}
+// The pane the person is using leads; the other follows.
+for (const pane of [edpane, pdfpane]) {
+  for (const ev of ['wheel', 'pointerdown', 'touchstart']) pane.addEventListener(ev, () => { driver = pane; }, {passive: true});
+  pane.addEventListener('keydown', () => { driver = pane; });
+  pane.addEventListener('scroll', () => {
+    if (expect.pane === pane && Math.abs(pane.scrollTop - expect.top) < 2) return;   // our own move
+    if (driver && driver !== pane) return;
+    if (syncQueued) return;
+    syncQueued = true;
+    requestAnimationFrame(() => { syncQueued = false; syncFrom(pane); });
+  }, {passive: true});
 }
 
 // ---------------------------------------------------------------- divider
