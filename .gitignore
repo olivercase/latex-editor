@@ -3,3 +3,11 @@ __pycache__/
 *.pyc
 .DS_Store
 .main.tex.editor-tmp
+
+# Never commit papers: only the made-up test paper in tests/fixtures is allowed.
+*.tex
+*.bib
+*.pdf
+*.docx
+!tests/fixtures/example_paper/*.tex
+!tests/fixtures/example_paper/*.bib

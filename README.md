@@ -18,7 +18,9 @@ app/build_app.sh                 # makes ~/Desktop/Manuscript Editor.app
 app/build_app.sh /Applications   # or put it somewhere else
 ```
 
-Double-click it: it starts `server.py` in the background if it is not already running (log in `~/Library/Logs/manuscript-editor.log`) and opens the editor in its own window (Chrome, Brave or Edge in app mode with a separate profile, or the default browser). The server keeps running after the window closes; `pkill -f editor/server.py` stops it. The app points at this checkout, so rebuild it after moving the folder.
+A native window (Swift and the system's WebKit). It needs no browser and no internet: everything, including pdf.js and KaTeX, is served from this folder on 127.0.0.1. Double-click it: it starts `server.py` if it is not already running (log in `~/Library/Logs/manuscript-editor.log`) and stops it again on quit. If you have unsaved edits, quitting asks first. The app points at this checkout, so rebuild it after moving the folder. Building needs `swiftc` (Xcode command line tools); running does not.
+
+The repository holds no papers: `.gitignore` refuses `.tex`, `.bib`, `.pdf` and `.docx` files except the made-up test paper in `tests/fixtures`.
 
 ## Using it
 
