@@ -11,6 +11,15 @@ python3 server.py --port 8378 --no-open
 
 A *paper* is any sub-folder of the root that has a `main.tex`. Builds use `tectonic` (on `PATH` or `/opt/homebrew/bin`).
 
+## Desktop app (macOS)
+
+```
+app/build_app.sh                 # makes ~/Desktop/Manuscript Editor.app
+app/build_app.sh /Applications   # or put it somewhere else
+```
+
+Double-click it: it starts `server.py` in the background if it is not already running (log in `~/Library/Logs/manuscript-editor.log`) and opens the editor in its own window (Chrome, Brave or Edge in app mode with a separate profile, or the default browser). The server keeps running after the window closes; `pkill -f editor/server.py` stops it. The app points at this checkout, so rebuild it after moving the folder.
+
 ## Using it
 
 - Click and type like in Word. Bold and italic (⌘B, ⌘I) work. Enter inside a paragraph or bullet starts a new one (not inside bold, italic or a footnote).
