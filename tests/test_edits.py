@@ -57,11 +57,16 @@ def ops_for(region):
         elif t[0] == "w":
             out.append([{"op": "empty", "at": i}])
             out.append([{"op": "into", "at": i, "text": " more"}])
+            if t[4] in ("todo", "unknown"):     # "Clear mark" on a placeholder, alone and after typing in it
+                out.append([{"op": "unwrap", "at": i}])
+                out.append([{"op": "into", "at": i, "text": " now written"}, {"op": "unwrap", "at": i}])
             out.append([{"op": "insert", "at": i + 1, "text": "[q]"}])
         if kind in ("p", "item"):
             raw = "\n\\item " if kind == "item" else "\n\n"
             out.append([{"op": "parbreak", "at": i + 1, "raw": raw},
                         {"op": "insert", "at": i + 2, "text": "[New] part"}])
+    if kind == "mark":      # a placeholder inside a locked block: square brackets are refused there by design
+        out = [ops for ops in out if not any("[" in o.get("text", "") or "]" in o.get("text", "") for o in ops)]
     return out
 
 
@@ -96,7 +101,7 @@ for name in S.papers():
         edit = {"start": r["start"], "end": r["end"], "old": r["src"],
                 "new": res["latex"], "shape": res["shape"]}
         new, why = S.plan_save(src, [edit], lookup)
-        if ops == [{"op": "clear"}] and r["kind"] not in ("p", "item"):
+        if ops == [{"op": "clear"}] and r["kind"] not in ("p", "item", "mark"):
             if new is not None:          # headings etc. must not be emptied
                 bad += 1
                 print("  EMPTIED", name, r["kind"])
@@ -106,6 +111,14 @@ for name in S.papers():
             if bad <= 5:
                 print("  REFUSED %s [%s] %s\n    ops=%s\n    new=%r" % (
                     name, r["kind"], why, json.dumps(ops)[:160], res["latex"][-160:]))
+    # a placeholder inside a locked block must refuse a square bracket
+    for r in [r for r in regions if r["kind"] == "mark"][:10]:
+        res = run_node([{"tokens": r["tokens"], "kind": r["kind"],
+                         "ops": [{"op": "into", "at": 0, "text": " x] y"}]}])[0]
+        edit = {"start": r["start"], "end": r["end"], "old": r["src"], "new": res["latex"], "shape": res["shape"]}
+        if S.plan_save(src, [edit], lookup)[0] is not None:
+            bad += 1
+            print("  ACCEPTED BRACKET IN MARK", name)
     # hand-made damage must be refused
     for r in regions[:40]:
         for evil in (r["src"] + " {", r["src"] + " }", r["src"] + " \\begin{x}",

@@ -49,6 +49,31 @@ header { display: flex; align-items: center; gap: 10px; padding: 7px 12px; backg
 .btn.primary:hover { filter: brightness(1.07); }
 .btn:disabled { opacity: .5; cursor: default; }
 kbd { font: inherit; opacity: .7; margin-left: 6px; font-weight: 400; }
+.tool, .btn, #paper, #synclink { transition: background-color .12s, border-color .12s, color .12s; }
+
+/* ---- find bar, sections menu ---- */
+main { position: relative; }
+#findbar { position: absolute; top: 8px; left: 16px; z-index: 15; display: none; align-items: center; gap: 2px;
+  background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 4px 4px 4px 8px; box-shadow: 0 4px 16px rgba(0,0,0,.14); }
+#findbar.show { display: flex; }
+#findq { width: 210px; border: 0; outline: none; font: inherit; padding: 4px 2px; background: transparent; }
+#findn { color: var(--muted); font-size: 12px; white-space: nowrap; padding: 0 6px; min-width: 62px; text-align: right; }
+#findn.none { color: var(--bad); }
+#findbar .tool { width: 26px; height: 26px; font-size: 17px; }
+::highlight(find) { background-color: #ffeaa0; }
+::highlight(findcur) { background-color: #ffb13d; }
+#outline { position: fixed; z-index: 25; display: none; flex-direction: column; min-width: 240px; max-width: 420px; max-height: 70vh; overflow-y: auto;
+  background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 5px; box-shadow: 0 8px 26px rgba(0,0,0,.18); }
+#outline.show { display: flex; }
+#outline .orow { border: 0; background: none; text-align: left; font: inherit; padding: 5px 9px; border-radius: 6px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; color: var(--soft); }
+#outline .orow:hover { background: #f0efec; }
+#outline .orow.cur { background: var(--accent-soft); color: var(--accent); }
+#outline .o-title, #outline .o-h1 { font-weight: 600; color: var(--ink); }
+#outline .o-h2 { padding-left: 22px; } #outline .o-h3 { padding-left: 35px; } #outline .o-h4 { padding-left: 48px; }
+#outline .empty { color: var(--muted); padding: 8px 10px; }
+#marks { border: 0; background: none; font: inherit; color: #9a6a00; cursor: pointer; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+#marks:hover { background: #fff3c9; }
 
 #panel { flex: none; padding: 10px 16px; border-bottom: 1px solid var(--line); display: none;
   background: #fdf1f0; color: #5c1a1d; max-height: 30vh; overflow: auto; }
@@ -164,12 +189,19 @@ label.tog { display: flex; align-items: center; gap: 5px; cursor: pointer; white
 .w-sub { vertical-align: sub; font-size: .72em; line-height: 0; }
 .w-tt { font: .86em ui-monospace, Menlo, monospace; } .w-sc { font-variant: small-caps; }
 .w-link { color: var(--accent); text-decoration: underline; text-decoration-color: #9db3dc; }
-.w-todo { background: var(--hl); }
+.w-todo { color: #c05600; }                       /* text still to be written (orange in the PDF) */
+.w-todo::before { content: "["; } .w-todo::after { content: "]"; }
+.w-unknown { background: var(--hl); }             /* a fact not yet known or checked (yellow in the PDF) */
 .w-fn { font-size: .86em; color: var(--muted); }
 .w-fn::before { content: "[footnote: "; } .w-fn::after { content: "]"; }
 
 /* figures, tables, equations */
 .locked { margin: 1.4em 0; }
+.marks { margin: -.6em 0 1.4em; padding: 6px 10px 4px; border-left: 3px solid var(--hl); background: #fffdf2; font-size: .9em; }
+.marks .markhead { font: 600 11px -apple-system, sans-serif; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+.marks .markrow { display: flex; gap: .5em; align-items: baseline; }
+.marks .marklabel { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+.marks .region { margin: 0 0 .25em; flex: 1; }
 .locked .cap { font-size: .9em; line-height: 1.55; }
 .locked .cap .region { margin-bottom: .2em; display: inline; }
 .locked .capwrap { display: flex; gap: .35em; align-items: baseline; }
@@ -209,6 +241,10 @@ body.showraw .locked.raw { display: block; }
 <body>
 <header>
   <select id="paper" title="Choose a paper"></select>
+  <div class="tools">
+    <button class="tool wide" id="outlinebtn" title="Jump to a section"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 5.5h12M7 10h9M7 14.5h9"/></svg><span>Sections</span></button>
+    <button class="tool" id="findbtn" title="Find in the text (⌘F)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5"/><path d="M13 13l3.5 3.5"/></svg></button>
+  </div>
   <div class="tools" id="tools">
     <button class="tool" data-cmd="undo" title="Undo (⌘Z)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5L3.5 8.5 7 12"/><path d="M4 8.5h8a4.5 4.5 0 010 9H9"/></svg></button>
     <button class="tool" data-cmd="redo" title="Redo (⇧⌘Z)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5l3.5 3.5L13 12"/><path d="M16 8.5H8a4.5 4.5 0 000 9h3"/></svg></button>
@@ -221,6 +257,7 @@ body.showraw .locked.raw { display: block; }
     <button class="tool" data-fmt="sub" title="Subscript" style="font-family:Georgia,serif;font-size:14px">x<sub style="font-size:9px">2</sub></button>
   </div>
   <div class="tools">
+    <button class="tool wide" id="clearmark" title="Turn the placeholder or highlight you are in into normal text (removes \todo or \unknown around it)" disabled>Clear mark</button>
     <button class="tool wide" id="showcomments" title="Show or hide the comments panel"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 4.5h13v9h-7l-4 3v-3h-2z"/><path d="M7 8h6M7 10.5h4" stroke-linecap="round"/></svg><span id="ccount2">Comments</span></button>
     <button class="tool wide" id="addcomment" title="Add a comment here (⌥⌘M)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 4.5h13v9h-7l-4 3v-3h-2z"/><path d="M10 7v4M8 9h4" stroke-linecap="round"/></svg><span>Comment</span></button>
   </div>
@@ -231,7 +268,9 @@ body.showraw .locked.raw { display: block; }
 </header>
 <div id="panel"></div>
 <div id="pop"></div>
+<div id="outline"></div>
 <main>
+  <div id="findbar"><input id="findq" placeholder="Find in the text" spellcheck="false" autocomplete="off"><span id="findn"></span><button class="tool" id="findprev" title="Previous (⇧⌘G)">‹</button><button class="tool" id="findnext" title="Next (⌘G)">›</button><button class="tool" id="findclose" title="Close (Esc)">×</button></div>
   <section id="edpane"><div id="docwrap"><div id="sheet"></div>
     <aside id="comments"><div class="chead"><b>Comments</b><span id="ccount"></span><button class="tool" id="cclose" title="Hide comments">×</button></div><div id="clist"></div></aside></div></section>
   <div id="divider"></div>
@@ -239,6 +278,7 @@ body.showraw .locked.raw { display: block; }
 </main>
 <footer>
   <span id="words"></span>
+  <button id="marks" hidden title="Go to the next placeholder (orange or yellow text still to be filled in or checked)"></button>
   <span id="status">Loading…</span>
   <label class="tog" title="Show the parts of the file that are LaTeX only (they cannot be edited here)">
     <input type="checkbox" id="showraw"> Show LaTeX blocks</label>
@@ -355,7 +395,8 @@ function serShape(root, kind) {
     if (!t) return;
     if (openComment) { out += '\n'; openComment = false; }
     // "\textmu" followed by a typed letter or space would otherwise be misread by TeX
-    if (/\\[A-Za-z]+$/.test(out) && /^[A-Za-z \t]/.test(t)) out += '{}';
+    // (and a typed "[" or "*" straight after a command would be taken as its option or star)
+    if (/\\[A-Za-z]+$/.test(out) && /^[A-Za-z \t[*]/.test(t)) out += '{}';
     // "\\" or "\item" followed by a typed "[" or "*" would take it as an option
     if (/(\\\\\*?|\\item[ \t]*)$/.test(out) && /^[[*]/.test(t)) out += '{}';
     // a bullet that starts with "[" would make it the bullet's label
@@ -455,6 +496,7 @@ function captionBlock(item, envs, word) {
   const box = document.createElement('div');
   box.className = 'cap';
   for (const r of item.regions || []) {
+    if (r.kind === 'mark') continue;
     const row = document.createElement('div');
     row.className = 'capwrap';
     if (word) { const n = document.createElement('span'); n.className = 'capno'; n.textContent = word + (item.number ? ' ' + item.number : '') + '.'; row.appendChild(n); word = null; }
@@ -513,8 +555,29 @@ function makeLocked(item, envs) {
   tag.className = 'tag';
   tag.textContent = item.env === 'reviewnote' ? 'Review note' : item.env;
   el.appendChild(tag);
-  for (const r of item.regions || []) el.appendChild(makeRegion(r, envs));
+  for (const r of item.regions || []) if (r.kind !== 'mark') el.appendChild(makeRegion(r, envs));
   return el;
+}
+// Placeholders (\todo, \unknown) that sit inside a locked block (the cover, a table): each is shown under the
+// block as a line of its own that can be typed in and cleared, so no marked text is out of reach.
+function marksBlock(item, envs) {
+  const marks = (item.regions || []).filter(r => r.kind === 'mark');
+  if (!marks.length) return null;
+  const box = document.createElement('div');
+  box.className = 'marks';
+  const head = document.createElement('div');
+  head.className = 'markhead';
+  head.textContent = marks.length === 1 ? 'To fill in, inside the block above' : 'To fill in, inside the block above (' + marks.length + ')';
+  box.appendChild(head);
+  for (const r of marks) {
+    const row = document.createElement('div');
+    row.className = 'markrow';
+    const l = document.createElement('span'); l.className = 'marklabel'; l.textContent = r.label || '';
+    row.appendChild(l);
+    row.appendChild(makeRegion(r, envs));
+    box.appendChild(row);
+  }
+  return box;
 }
 function renderDoc() {
   regions = new Map();
@@ -522,7 +585,11 @@ function renderDoc() {
   const envs = [];
   for (const item of doc.items) {
     if (item.type === 'region') frag.appendChild(makeRegion(item, envs));
-    else if (item.type === 'locked') frag.appendChild(makeLocked(item, envs));
+    else if (item.type === 'locked') {
+      frag.appendChild(makeLocked(item, envs));
+      const mk = marksBlock(item, envs);
+      if (mk) frag.appendChild(mk);
+    }
     else if (item.type === 'env') {
       if (item.open) {
         envs.push(item.name);
@@ -532,6 +599,7 @@ function renderDoc() {
   }
   sheet.replaceChildren(frag);
   refreshDirty();
+  if (findBar.classList.contains('show')) runFind(true);
 }
 
 // ---------------------------------------------------------------- dirty state
@@ -551,7 +619,7 @@ function refreshDirty() {
   saveBtn.firstChild.textContent = n ? 'Save' : 'Recompile';
   saveState.textContent = n ? (n === 1 ? '1 paragraph not saved' : n + ' paragraphs not saved') : 'All changes saved';
   saveState.className = n ? 'dirty' : '';
-  clearTimeout(refreshDirty.t); refreshDirty.t = setTimeout(() => { countWords(); refreshComments(); }, 300);
+  clearTimeout(refreshDirty.t); refreshDirty.t = setTimeout(() => { countWords(); refreshComments(); countMarks(); if (findBar.classList.contains('show')) runFind(true); }, 300);
   return n;
 }
 
@@ -703,6 +771,31 @@ function applyFormat(key) {
   }
   refreshDirty(); updateTools();
 }
+// ---------------------------------------------------------------- placeholders (\todo, \unknown)
+// Text inside \todo{...} (orange) or \unknown{...} (yellow) is typed like any other. "Clear mark" takes the
+// mark off: with the caret in a mark, the whole mark; with a selection, the marks over the selected text.
+const MARKS = [{cls: 'w-todo', tags: []}, {cls: 'w-unknown', tags: []}];
+function markAt(range, region) {
+  if (!range || !region) return null;
+  if (range.collapsed) { for (const f of MARKS) if (fmtAncestor(range.startContainer, f, region)) return f; return null; }
+  for (const f of MARKS) if (textNodesIn(range, region).some(n => fmtAncestor(n, f, region))) return f;
+  return null;
+}
+function clearMark() {
+  const sel = getSelection();
+  if (!sel.rangeCount || busy) return;
+  let range = sel.getRangeAt(0);
+  const region = editableRegion(range.startContainer);
+  if (!region || editableRegion(range.endContainer) !== region) { hint('Click inside a highlighted placeholder first'); return; }
+  const f = markAt(range, region);
+  if (!f) { hint('The caret is not in a placeholder or highlight'); return; }
+  if (range.collapsed) {
+    const w = fmtAncestor(range.startContainer, f, region);
+    range = document.createRange(); range.selectNodeContents(w);
+  } else snapToAtoms(range);
+  removeFormat(range, region, f);
+  refreshDirty(); updateTools();
+}
 function updateTools() {
   const sel = getSelection();
   const range = sel.rangeCount ? sel.getRangeAt(0) : null;
@@ -712,12 +805,14 @@ function updateTools() {
     b.disabled = !region || busy;
     b.classList.toggle('on', !!region && (range.collapsed ? !!fmtAncestor(range.startContainer, f, region) : allFormatted(range, region, f)));
   }
+  $('clearmark').disabled = busy || !markAt(range, region);
 }
 document.addEventListener('selectionchange', () => { clearTimeout(updateTools.t); updateTools.t = setTimeout(updateTools, 60); });
 for (const b of document.querySelectorAll('.tool')) {
   b.addEventListener('mousedown', e => e.preventDefault());      // keep the caret where it is
   b.addEventListener('click', () => {
-    if (b.dataset.fmt) applyFormat(b.dataset.fmt);
+    if (b.id === 'clearmark') clearMark();
+    else if (b.dataset.fmt) applyFormat(b.dataset.fmt);
     else if (b.dataset.cmd) { document.execCommand(b.dataset.cmd); refreshDirty(); }
   });
 }
@@ -908,6 +1003,15 @@ sheet.addEventListener('keydown', e => {
     const raw = kind === 'item' ? '\n\\item ' : '\n\n';
     document.execCommand('insertHTML', false,
       `<span class="atom parbreak" contenteditable="false" data-raw="${raw.replace(/\n/g, '&#10;').replace(/\\/g, '&#92;')}" title="New ${kind === 'item' ? 'bullet' : 'paragraph'} starts here">¶</span>`);
+    // WebKit drops contenteditable="false" from what it inserts and leaves the caret inside the mark,
+    // so the next letters would be typed into the mark and lost on saving: lock it and step out of it.
+    rerenderAtoms(el);
+    const fn = sel.focusNode, mark = fn && (fn.nodeType === 1 ? fn : fn.parentElement).closest('.atom.parbreak');
+    if (mark && el.contains(mark)) {
+      if (mark.textContent !== '¶') mark.textContent = '¶';
+      const r = document.createRange(); r.setStartAfter(mark); r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    }
     refreshDirty();
   }
 });
@@ -966,16 +1070,54 @@ panel.addEventListener('click', e => {
 // keep typing; edits made meanwhile simply stay unsaved (orange).
 let building = false, buildAgain = false, againSince = null;
 function freeze(on) { busy = on; sheet.inert = on; saveBtn.disabled = on; undoBtn.disabled = on; }
-function focusedRegionIndex() {
-  const el = regionOf(document.activeElement);
-  return el ? [...sheet.querySelectorAll('.region')].indexOf(el) : -1;
+// Where the caret is, so a save (which redraws the page) can put it back: which paragraph, and how
+// far into it (letters, with a chip counting as one). A new-paragraph mark before the caret means
+// the caret will be in the following paragraph once saved.
+function caretPos() {
+  const sel = getSelection();
+  const el = sel.rangeCount ? editableRegion(sel.focusNode) : null;
+  if (!el) return null;
+  const r = document.createRange();
+  r.setStart(el, 0); r.setEnd(sel.focusNode, sel.focusOffset);
+  let extra = 0, off = 0;
+  const walk = n => {
+    for (const c of n.childNodes) {
+      if (c.nodeType === 3) off += c.data.replace(/[\u200b\ufeff]/g, '').length;
+      else if (c.nodeType === 1) {
+        if (c.classList.contains('parbreak')) { extra++; off = 0; }
+        else if (c.classList.contains('atom')) off++;
+        else walk(c);
+      }
+    }
+  };
+  walk(r.cloneContents());
+  return {index: [...sheet.querySelectorAll('.region')].indexOf(el) + extra, off};
+}
+function placeCaret(el, off) {
+  let left = off, done = false;
+  const r = document.createRange();
+  const walk = n => {
+    for (const c of n.childNodes) {
+      if (done) return;
+      if (c.nodeType === 3) {
+        if (left <= c.data.length) { r.setStart(c, left); done = true; return; }
+        left -= c.data.length;
+      } else if (c.nodeType === 1) {
+        if (c.classList.contains('atom')) { if (left === 0) { r.setStartBefore(c); done = true; return; } left--; }
+        else walk(c);
+      }
+    }
+  };
+  walk(el);
+  if (done) r.collapse(true); else { r.selectNodeContents(el); r.collapse(false); }
+  const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
 }
 async function save() {
   if (busy || !paper) return;
+  const at = caretPos();
   freeze(true);
   const edits = dirtyList();
-  const where = focusedRegionIndex();
-  let res;
+  let res, redrawn = false;
   try {
     setStatus(edits.length ? 'Saving…' : 'Compiling…');
     res = await postJSON('/api/save', {paper, edits, build: false});
@@ -984,15 +1126,16 @@ async function save() {
       showPanel('<b>Not saved.</b> ' + escHTML(res.error) + ' Nothing was written to main.tex; your edits are still on the page.<div class="row"><button class="btn" id="dismiss">Dismiss</button></div>');
       return;
     }
-    if (edits.length) {
-      await loadDoc(true);
-      const r = sheet.querySelectorAll('.region')[where];
-      if (r && r.contentEditable === 'true') r.focus({preventScroll: true});
-    }
+    if (edits.length) { await loadDoc(true); redrawn = true; }
   } catch (err) {
     setStatus('Could not reach the editor server: ' + err.message + ' (nothing saved; your edits are still here)', 'bad');
     return;
-  } finally { freeze(false); }
+  } finally {
+    freeze(false);
+    // the page was redrawn: put the caret back where it was (only possible once the page is live again)
+    const r = redrawn && at && sheet.querySelectorAll('.region')[at.index];
+    if (r && r.contentEditable === 'true') { r.focus({preventScroll: true}); placeCaret(r, at.off); }
+  }
   compile(res.saved_at || null, edits.length ? 'Saved. Compiling…' : 'Compiling…');
 }
 async function compile(since, msg) {
@@ -1111,6 +1254,7 @@ async function indexText(list) {
     if (pages !== list) return;
     try { await pageItems(p); } catch (e) { return; }
   }
+  if (restorePdf && pages === list) { restorePdf = false; driver = edpane; syncFrom(edpane); }
 }
 async function pageItems(p) {
   if (p.items) return p.items;
@@ -1367,6 +1511,164 @@ for (const pane of [edpane, pdfpane]) {
   }, {passive: true});
 }
 
+// ---------------------------------------------------------------- find (⌘F)
+// Matches are painted with the CSS highlight API, so the text itself is never touched.
+const findBar = $('findbar'), findQ = $('findq'), findN = $('findn');
+const canHL = !!(window.CSS && CSS.highlights && window.Highlight);
+let finds = [], findAt = -1;
+function runFind(keep) {
+  const q = findQ.value.toLowerCase();
+  const was = findAt;
+  finds = []; findAt = -1;
+  const boxTop = edpane.getBoundingClientRect().top;
+  let first = -1;
+  if (q) for (const el of sheet.querySelectorAll('.region')) {
+    if (!el.offsetParent) continue;
+    const nodes = []; let full = '';
+    const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode: n => n.parentElement.closest('.atom') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+    while (tw.nextNode()) { nodes.push([tw.currentNode, full.length]); full += tw.currentNode.data; }
+    const low = full.toLowerCase();
+    if (low.length !== full.length) continue;
+    const locate = (off, end) => {
+      for (let i = nodes.length - 1; i >= 0; i--) if (end ? nodes[i][1] < off : nodes[i][1] <= off) return [nodes[i][0], off - nodes[i][1]];
+      return [nodes[0][0], 0];
+    };
+    for (let i = low.indexOf(q); i >= 0; i = low.indexOf(q, i + q.length)) {
+      const [n1, o1] = locate(i, false), [n2, o2] = locate(i + q.length, true);
+      const r = document.createRange();
+      r.setStart(n1, Math.min(o1, n1.data.length)); r.setEnd(n2, Math.min(o2, n2.data.length));
+      if (first < 0 && !keep && el.getBoundingClientRect().bottom > boxTop) first = finds.length;
+      finds.push(r);
+    }
+  }
+  if (finds.length) findAt = keep ? Math.min(Math.max(was, 0), finds.length - 1) : Math.max(first, 0);
+  paintFind();
+  if (!keep) showFind();
+}
+function paintFind() {
+  if (canHL) {
+    if (finds.length) CSS.highlights.set('find', new Highlight(...finds)); else CSS.highlights.delete('find');
+    if (finds[findAt]) CSS.highlights.set('findcur', new Highlight(finds[findAt])); else CSS.highlights.delete('findcur');
+  }
+  findN.textContent = !findQ.value ? '' : finds.length ? `${findAt + 1} of ${finds.length}` : 'Not found';
+  findN.className = findQ.value && !finds.length ? 'none' : '';
+}
+function showFind() {
+  const m = finds[findAt];
+  if (!m) return;
+  const r = m.getBoundingClientRect(), box = edpane.getBoundingClientRect();
+  if (r.top < box.top + 70 || r.bottom > box.bottom - 70) {
+    driver = edpane;
+    edpane.scrollTo({top: edpane.scrollTop + r.top - box.top - edpane.clientHeight * 0.35, behavior: 'smooth'});
+  }
+  if (!canHL) { const el = regionOf(m.startContainer); if (el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } }
+}
+function stepFind(step) {
+  if (!finds.length) return;
+  findAt = (findAt + step + finds.length) % finds.length;
+  paintFind(); showFind();
+}
+function openFind() {
+  const picked = String(getSelection());
+  findBar.classList.add('show');
+  if (picked.trim() && picked.length < 80 && !picked.includes('\n')) findQ.value = picked;
+  findQ.focus(); findQ.select();
+  runFind(false);
+}
+function closeFind() {
+  if (!findBar.classList.contains('show')) return;
+  findBar.classList.remove('show');
+  const m = finds[findAt];
+  finds = []; findAt = -1; paintFind();
+  // leave the match selected, ready to type over
+  const el = m && editableRegion(m.startContainer);
+  if (el && !busy) { el.focus({preventScroll: true}); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(m); }
+}
+findQ.addEventListener('input', () => runFind(false));
+findQ.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeFind(); }
+});
+$('findprev').addEventListener('click', () => stepFind(-1));
+$('findnext').addEventListener('click', () => stepFind(1));
+$('findclose').addEventListener('click', closeFind);
+$('findbtn').addEventListener('click', () => findBar.classList.contains('show') ? closeFind() : openFind());
+document.addEventListener('keydown', e => {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'f') { e.preventDefault(); openFind(); }
+  else if (k === 'g' && findBar.classList.contains('show')) { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); }
+});
+
+// ---------------------------------------------------------------- sections menu
+const outline = $('outline'), outlineBtn = $('outlinebtn');
+function flashEl(el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+function closeOutline() { outline.classList.remove('show'); outlineBtn.classList.remove('on'); }
+function openOutline() {
+  const heads = [...sheet.querySelectorAll('.k-title, .k-h1, .k-h2, .k-h3, .k-h4')].filter(h => h.offsetParent && h.textContent.trim());
+  outline.replaceChildren();
+  let cur = null;
+  const line = edpane.getBoundingClientRect().top + edpane.clientHeight * 0.3;
+  for (const h of heads) {
+    const b = document.createElement('button');
+    b.className = 'orow o' + ([...h.classList].find(c => c.startsWith('k-')) || 'k-h1').slice(1);
+    b.textContent = h.textContent.replace(/\s+/g, ' ').trim();
+    b.title = b.textContent;
+    if (h.getBoundingClientRect().top <= line) cur = b;
+    b.addEventListener('click', () => {
+      closeOutline();
+      driver = edpane;
+      edpane.scrollTo({top: edpane.scrollTop + h.getBoundingClientRect().top - edpane.getBoundingClientRect().top - 24, behavior: 'smooth'});
+      flashEl(h);
+    });
+    outline.appendChild(b);
+  }
+  if (!heads.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'This paper has no section headings yet.'; outline.appendChild(e); }
+  if (cur) cur.classList.add('cur');
+  const r = outlineBtn.getBoundingClientRect();
+  outline.style.left = r.left + 'px'; outline.style.top = (r.bottom + 6) + 'px';
+  outline.classList.add('show'); outlineBtn.classList.add('on');
+  if (cur) cur.scrollIntoView({block: 'center'});
+}
+outlineBtn.addEventListener('click', () => outline.classList.contains('show') ? closeOutline() : openOutline());
+document.addEventListener('mousedown', e => { if (!outline.contains(e.target) && !outlineBtn.contains(e.target)) closeOutline(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeOutline(); closeFind(); } });
+
+// ---------------------------------------------------------------- placeholders still to fill in
+const marksBtn = $('marks');
+const markEls = () => [...sheet.querySelectorAll('.region .w-todo, .region .w-unknown, .region.k-mark')].filter(m => m.offsetParent);
+function countMarks() {
+  const n = markEls().length;
+  marksBtn.hidden = !n;
+  marksBtn.textContent = n === 1 ? '1 placeholder to fill in ›' : n + ' placeholders to fill in ›';
+}
+marksBtn.addEventListener('mousedown', e => e.preventDefault());
+marksBtn.addEventListener('click', () => {
+  const list = markEls();
+  if (!list.length) return;
+  // the next one below the caret (or below the middle of the view), wrapping round
+  const sel = getSelection();
+  const here = sel.rangeCount && regionOf(sel.focusNode) ? sel.getRangeAt(0).getBoundingClientRect().bottom
+    : edpane.getBoundingClientRect().top + edpane.clientHeight * 0.35;
+  const m = list.find(x => x.getBoundingClientRect().top > here + 1) || list[0];
+  driver = edpane;
+  m.scrollIntoView({block: 'center', behavior: 'smooth'});
+  const el = editableRegion(m);
+  if (el && !busy) {
+    el.focus({preventScroll: true});
+    const r = document.createRange(); r.selectNodeContents(m);
+    sel.removeAllRanges(); sel.addRange(r);
+  } else flashEl(regionOf(m) || m);
+});
+
+// ---------------------------------------------------------------- remember where you were
+let scrollNote, restorePdf = false;
+edpane.addEventListener('scroll', () => {
+  clearTimeout(scrollNote);
+  scrollNote = setTimeout(() => { if (paper && doc && doc.paper === paper) try { localStorage.setItem('scroll:' + paper, Math.round(edpane.scrollTop)); } catch (e) {} }, 400);
+}, {passive: true});
+
 // ---------------------------------------------------------------- divider
 const divider = $('divider');
 divider.addEventListener('mousedown', e => {
@@ -1385,14 +1687,18 @@ let rz;
 addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => paper && loadPdf(true), 250); });
 
 // ---------------------------------------------------------------- start
+const paperLabels = new Map();
 async function openPaper(name) {
   paper = name;
   hidePanel();
   setStatus('Loading…');
   history.replaceState(null, '', '?paper=' + enc(name));
   try { localStorage.setItem('paper', name); } catch (e) {}
-  document.title = name.replace(/_/g, ' ') + ' · Manuscript editor';
+  document.title = (paperLabels.get(name) || name) + ' · Manuscript editor';
+  closeFind(); closeOutline();
   await loadDoc(false);
+  let y = 0; try { y = +localStorage.getItem('scroll:' + name) || 0; } catch (e) {}
+  if (y) { edpane.scrollTop = y; restorePdf = true; }
   setStatus('Click any text to edit it. Click the PDF to jump to that paragraph.');
   setBuild('');
   await loadPdf(false);
@@ -1401,9 +1707,20 @@ async function openPaper(name) {
   try { const s = localStorage.getItem('split'); if (s) edpane.style.flexBasis = s; } catch (e) {}
   const {papers, default: dflt} = await getJSON('/api/papers');
   const sel = $('paper');
-  for (const p of papers) { const o = document.createElement('option'); o.value = p.name; o.textContent = p.name.replace(/_/g, ' '); sel.appendChild(o); }
+  // papers kept in a folder of their own (published, submitted ...) are listed under that folder's name
+  const groups = new Map();
+  for (const p of papers) {
+    const o = document.createElement('option'); o.value = p.name; o.textContent = p.label || p.name.replace(/_/g, ' ');
+    paperLabels.set(p.name, o.textContent);
+    if (!p.group) { sel.appendChild(o); continue; }
+    if (!groups.has(p.group)) { const g = document.createElement('optgroup'); const t = p.group.replace(/_/g, ' '); g.label = t[0].toUpperCase() + t.slice(1); groups.set(p.group, g); }
+    groups.get(p.group).appendChild(o);
+  }
+  for (const g of groups.values()) sel.appendChild(g);
   let want = new URLSearchParams(location.search).get('paper') || dflt;
   try { want = want || localStorage.getItem('paper'); } catch (e) {}
+  // a paper that has since been moved into a folder is found by its own name
+  if (want && !papers.some(p => p.name === want)) { const m = papers.filter(p => p.name.split('/').pop() === want.split('/').pop()); if (m.length === 1) want = m[0].name; }
   if (!papers.some(p => p.name === want)) want = papers[0] && papers[0].name;
   if (!want) { setStatus('No papers found (a paper is a folder with a main.tex).', 'bad'); return; }
   sel.value = want;

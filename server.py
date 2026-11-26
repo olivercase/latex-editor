@@ -66,6 +66,7 @@ WRAPS = {
     "texttt": (0, "tt"), "textsc": (0, "sc"), "textrm": (0, ""),
     "textsf": (0, ""), "textnormal": (0, ""), "mbox": (0, ""),
     "revised": (0, ""), "tocheck": (0, ""), "todo": (0, "todo"),
+    "unknown": (0, "unknown"),      # a fact not yet known or checked (yellow in the PDF); its text is editable
     "footnote": (0, "fn"),
     "href": (1, "link"), "hyperlink": (1, "link"), "hypertarget": (1, ""),
     "textcolor": (1, ""),
@@ -812,10 +813,12 @@ TRANSPARENT = {"abstract", "itemize", "enumerate", "quote", "quotation",
                "description", "proposition", "theorem", "lemma", "document"}
 MATH_ENVS = {"equation", "align", "gather", "multline", "eqnarray",
              "displaymath", "math", "flalign", "alignat"}
+MARK_RE = re.compile(r"\\(?:todo|unknown)[ \t]*\{")
 HEAD_RE = re.compile(
-    r"[ \t]*\\(section|subsection|subsubsection|paragraph|subparagraph)\*?"
+    r"[ \t]*\\(section|subsection|subsubsection|paragraph|subparagraph|frontsection)\*?"
     r"[ \t]*(?:\[[^\]\n]*\])?[ \t]*\{")
-HEAD_KIND = {"section": "h1", "subsection": "h2", "subsubsection": "h3",
+HEAD_KIND = {"section": "h1", "frontsection": "h1",      # \frontsection: unnumbered section of a thesis
+             "subsection": "h2", "subsubsection": "h3",
              "paragraph": "h4", "subparagraph": "h4"}
 BEGIN_RE = re.compile(r"[ \t]*\\begin\{([A-Za-z]+\*?)\}")
 END_RE = re.compile(r"[ \t]*\\end\{([A-Za-z]+\*?)\}[ \t]*")
@@ -863,7 +866,39 @@ class Doc:
         item = {"type": "locked", "kind": kind, "start": start, "end": end,
                 "preview": self.src[start:end].strip()[:1500]}
         item.update(extra)
+        marks = self._marks(start, end, item.get("regions") or [])
+        if marks:
+            item["regions"] = list(item.get("regions") or []) + marks
         self.items.append(item)
+
+    def _marks(self, start, end, taken):
+        """Placeholders (\\todo{...}, \\unknown{...}) inside a locked block, as editable regions of kind
+        "mark", so that no marked text is out of reach. Each region is the whole command, so its text
+        can be typed and the mark itself can be cleared. Marks already inside a caption are left to it."""
+        src, out = self.src, []
+        spans = [(r["start"], r["end"]) for r in taken]
+        for m in MARK_RE.finditer(src, start, end):
+            a = m.start()
+            if any(x <= a < y for x, y in spans):
+                continue
+            line = src[src.rfind("\n", 0, a) + 1:a]
+            if re.search(r"(?<!\\)%", line):
+                continue                                    # commented out
+            k = match_brace(src, m.end() - 1, end)
+            if k < 0:
+                continue
+            r = self._region("mark", a, k + 1)
+            if not r:
+                continue
+            # What stands before the mark on its line (or since the last \\\\), as a label for the page.
+            before = re.split(r"\\\\", line)[-1]
+            before = re.sub(r"\\(?:color|textcolor|fontsize)\*?(?:\{[^{}]*\})+", " ", before)
+            before = re.sub(r"\{[\d.\s]*(?:mm|pt|cm|em|in)?\}", " ", before)       # lengths and counts
+            before = re.sub(r"\\[A-Za-z]+\*?(\[[^\]]*\])?|[{}&]", " ", before)
+            r["label"] = re.sub(r"\s+", " ", before).strip()[-70:]
+            spans.append((a, k + 1))
+            out.append(r)
+        return out
 
     def _flush(self, kind, start, end):
         if start is None:
@@ -1105,14 +1140,38 @@ class Doc:
 # Files
 # --------------------------------------------------------------------------
 
+SKIP_DIRS = ("house", "editor", "archive")
+
+
+def _is_paper(d):
+    return (d / "main.tex").is_file() and d.resolve() != HERE
+
+
 def papers():
+    """Paper names, as paths relative to ROOT. A paper is a folder with a
+    main.tex, either directly in ROOT or one level down inside a plain folder
+    that groups papers (published/, submitted/ ...). Folders inside a paper
+    are never searched."""
     out = []
-    for tex in sorted(ROOT.glob("*/main.tex")):
-        d = tex.parent
-        if d.name in ("house", "editor") or d.name.startswith(".") \
-                or d.resolve() == HERE or not tex.is_file():
+    try:
+        tops = sorted(p for p in ROOT.iterdir() if p.is_dir())
+    except OSError:
+        return out
+    for d in tops:
+        if d.name in SKIP_DIRS or d.name.startswith(".") or d.resolve() == HERE:
             continue
-        out.append(d.name)
+        if _is_paper(d):
+            out.append(d.name)
+            continue
+        try:
+            subs = sorted(p for p in d.iterdir() if p.is_dir())
+        except OSError:
+            continue
+        for sub in subs:
+            if sub.name in SKIP_DIRS or sub.name.startswith("."):
+                continue
+            if _is_paper(sub):
+                out.append(d.name + "/" + sub.name)
     return out
 
 
@@ -1120,6 +1179,11 @@ def paper_dir(name):
     if name not in papers():
         raise KeyError(name)
     return ROOT / name
+
+
+def paper_key(d):
+    """The paper's name as papers() gives it."""
+    return d.relative_to(ROOT).as_posix()
 
 
 def read_tex(d):
@@ -1154,10 +1218,10 @@ def write_tex(d, text):
 
 
 def backup(d, text):
-    folder = BACKUPS / d.name
+    folder = BACKUPS / paper_key(d)
     if ROOT != HERE.parent.resolve():
         # papers from another --root get their own backup folders
-        folder = BACKUPS / ("root-" + hashlib.sha1(str(ROOT).encode()).hexdigest()[:10]) / d.name
+        folder = BACKUPS / ("root-" + hashlib.sha1(str(ROOT).encode()).hexdigest()[:10]) / paper_key(d)
     folder.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y-%m-%d_%H%M%S")
     path = folder / ("main.%s.tex" % stamp)
@@ -1350,8 +1414,8 @@ def check_edit(region, new, client_shape, lookup):
     if not new.strip(" \t\n"):
         if new != "":
             return "it contains only spaces"
-        if region["kind"] in ("p", "item"):
-            return None                     # the paragraph or bullet is deleted
+        if region["kind"] in ("p", "item", "mark"):
+            return None                     # the paragraph, bullet or placeholder is deleted
         return "a heading, title or caption cannot be left empty"
     if new != new.strip(" \t\n"):
         return "it starts or ends with a line break"
@@ -1369,6 +1433,11 @@ def check_edit(region, new, client_shape, lookup):
             return "a heading or caption cannot be split into paragraphs"
         if not top_only:
             return "a paragraph break would fall inside bold, italic or another wrapper"
+    if kind == "mark":
+        # Inside a locked block (a table cell, a drawing) a square bracket could end an optional argument.
+        for ch in "[]":
+            if new.count(ch) > region["src"].count(ch):
+                return "a placeholder inside a table or drawing cannot contain [ or ]"
     if kind == "item" and new.startswith(("[", "*")):
         return "a bullet would start with [ or * and change the list"
     old_atoms, old_wraps = [], set()
@@ -1669,7 +1738,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(p)
             if u.path == "/api/papers":
                 return self._send(200, {"papers": [
-                    {"name": n, "pdf": (ROOT / n / "main.pdf").exists()} for n in papers()],
+                    {"name": n, "group": n.rpartition("/")[0], "label": n.rpartition("/")[2].replace("_", " "),
+                     "pdf": (ROOT / n / "main.pdf").exists()} for n in papers()],
                     "default": self.server.default_paper})
             if u.path == "/api/doc":
                 return self._send(200, doc_payload(q.get("paper", "")))
@@ -1741,13 +1811,13 @@ class Handler(BaseHTTPRequestHandler):
                     write_tex(d, new)
                     if read_tex(d) != new:
                         return self._send(500, {"error": "main.tex did not read back as written; the previous version is in " + str(path)})
-                    LAST_SAVE[d.name] = (path, digest(new))
+                    LAST_SAVE[paper_key(d)] = (path, digest(new))
         build = run_build(d, saved_at) if req.get("build", True) else None
         self._send(200, {"saved": len(edits), "saved_at": saved_at, "build": build})
 
     def _revert(self, d, req):
         with FILE_LOCK:
-            path, after = LAST_SAVE.get(d.name, (None, None))
+            path, after = LAST_SAVE.get(paper_key(d), (None, None))
             text = read_tex(d)
             if not path or digest(text) != after:
                 return self._send(409, {"error": "main.tex has changed since that save, so it was not reverted"})
@@ -1756,7 +1826,7 @@ class Handler(BaseHTTPRequestHandler):
             backup(d, text)
             saved_at = time.time()
             write_tex(d, old)
-            LAST_SAVE.pop(d.name, None)
+            LAST_SAVE.pop(paper_key(d), None)
         build = run_build(d, saved_at) if req.get("build", True) else None
         self._send(200, {"saved_at": saved_at, "build": build})
 
@@ -1775,6 +1845,10 @@ def main():
             sys.exit("No such folder: %s" % ROOT)
     if a.paper:
         a.paper = a.paper.rstrip("/")
+        if a.paper not in papers():      # a paper inside published/ etc. can be given by its own name
+            same = [n for n in papers() if n.rpartition("/")[2] == a.paper]
+            if len(same) == 1:
+                a.paper = same[0]
         if a.paper not in papers():
             sys.exit("No paper called %r. Papers: %s" % (a.paper, ", ".join(papers())))
     url = "http://127.0.0.1:%d/" % a.port

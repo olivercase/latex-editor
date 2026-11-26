@@ -45,6 +45,8 @@ function apply(root, op) {
     kids[op.at].append(new Text(op.text));
   } else if (op.op === 'parbreak') {
     const s = new El('SPAN', 'atom parbreak'); s.dataset.raw = op.raw; kids.splice(op.at, 0, s);
+  } else if (op.op === 'unwrap') {   // "Clear mark": the wrapper goes, its contents stay
+    kids.splice(op.at, 1, ...kids[op.at].childNodes);
   } else if (op.op === 'bold') {     // Cmd-B over new text
     const b = new El('B'); b.append(new Text(op.text)); kids.splice(op.at, 0, b);
   } else throw new Error('unknown op ' + op.op);
